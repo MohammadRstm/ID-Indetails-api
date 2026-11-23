@@ -121,7 +121,7 @@ See [messaging.md](messaging.md).
   - Cash profit = received − spent.
 - **Client BOQs and variation orders** (they replaced the statements in Oct 2026): numbered `BQ-YYYY-NNN` and `VO-YYYY-NNN`, one sequence per prefix and year. They set the work price; they are not invoices and owe nothing by themselves.
 - **Labour weeks** run Monday to Saturday.
-- **Site expenses** are grouped by their item name (trimmed, lower-case), and also carry a category (materials, contractor, equipment, fees, other) added with the cost-only rework in Oct 2026.
+- **Site expenses** are grouped by their item name (trimmed, lower-case), and also carry a category added with the cost-only rework in Oct 2026: since 23 Nov 2026 one of Execution's own expense categories (see finance.md).
 - **The break** is paid, reduces only the required hours, and applies on days longer than 6 hours. The 6-hour threshold is a code constant, not a setting.
 - **Overtime** is:
   - time outside the person's hours;

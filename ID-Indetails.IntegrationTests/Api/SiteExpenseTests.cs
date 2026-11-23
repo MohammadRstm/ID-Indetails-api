@@ -37,7 +37,7 @@ public class SiteExpenseTests(ApiFactory api) : IClassFixture<ApiFactory>
         added[2].UnitCost.ShouldBe(2.5m);
         added[2].Cost.ShouldBe(25m);
         // left out, an expense is USD, spent today, in materials, under no label
-        added.ShouldAllBe(e => e.CanEdit && e.Currency == "USD" && e.Category == SiteExpenseCategory.Materials && e.AccountLabel == null && e.SpentOn == e.AddedOn);
+        added.ShouldAllBe(e => e.CanEdit && e.Currency == "USD" && e.Category == "materials" && e.AccountLabel == null && e.SpentOn == e.AddedOn);
 
         var list = await ListAsync(project.Id, employee.AccessToken);
         list.All.Count.ShouldBe(3);
@@ -130,7 +130,7 @@ public class SiteExpenseTests(ApiFactory api) : IClassFixture<ApiFactory>
             spentOn = "2026-09-14", accountLabelId = label.Id,
         }))[0];
         crane.ShouldSatisfyAllConditions(
-            e => e.Category.ShouldBe(SiteExpenseCategory.Contractor),
+            e => e.Category.ShouldBe("contractor"),
             e => e.Currency.ShouldBe("LBP"),
             e => e.SpentOn.ShouldBe(new DateOnly(2026, 9, 14)),
             e => e.Supplier.ShouldBe("Beirut Cranes"),
@@ -149,7 +149,7 @@ public class SiteExpenseTests(ApiFactory api) : IClassFixture<ApiFactory>
             new { name = "Crane hire (2 days)", amount = 1800m }, superAdmin.AccessToken)).ReadAsync<SiteExpenseResponse>();
         renamed.ShouldSatisfyAllConditions(
             e => e.Currency.ShouldBe("LBP"),
-            e => e.Category.ShouldBe(SiteExpenseCategory.Contractor),
+            e => e.Category.ShouldBe("contractor"),
             e => e.SpentOn.ShouldBe(new DateOnly(2026, 9, 14)),
             e => e.Cost.ShouldBe(1800m),
             e => e.AccountLabel.ShouldBeNull());
@@ -159,7 +159,7 @@ public class SiteExpenseTests(ApiFactory api) : IClassFixture<ApiFactory>
             superAdmin.AccessToken)).ReadAsync<SiteExpenseResponse>();
         moved.ShouldSatisfyAllConditions(
             e => e.Currency.ShouldBe("USD"),
-            e => e.Category.ShouldBe(SiteExpenseCategory.Equipment),
+            e => e.Category.ShouldBe("equipment"),
             e => e.SpentOn.ShouldBe(new DateOnly(2026, 9, 15)),
             e => e.AccountLabel!.Id.ShouldBe(label.Id));
 
@@ -247,7 +247,7 @@ public class SiteExpenseTests(ApiFactory api) : IClassFixture<ApiFactory>
         ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());
         var added = await response.ReadAsync<List<SiteExpenseResponse>>();
         added.Select(e => e.Cost).ShouldBe([150m, 40m]);
-        added.ShouldAllBe(e => e.Category == SiteExpenseCategory.Materials);
+        added.ShouldAllBe(e => e.Category == "materials");
 
         // the same batch again adds nothing
         var again = await (await Client.PostJsonAsync($"/api/projects/{project.Id}/materials",

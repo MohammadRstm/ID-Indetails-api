@@ -35,7 +35,7 @@ public sealed record AddExpenseInput : ProtonActionInput
     [Description("USD or LBP. Default USD.")]
     public string? Currency { get; init; }
 
-    [Description("assets, services, contractor, software, travel, hardware or other.")]
+    [Description("One of Design's expense categories' codes (the business keeps its own list, e.g. assets, services, software, other).")]
     public string? Category { get; init; }
 
     [Description("Default today.")]
@@ -165,8 +165,8 @@ public sealed record SiteExpenseInput
 
     public string? Note { get; init; }
 
-    [Description("materials (the default), contractor, equipment, fees or other.")]
-    public SiteExpenseCategory? Category { get; init; }
+    [Description("One of Execution's expense categories' codes (the business keeps its own list, e.g. materials, the default, contractor, fees, other).")]
+    public string? Category { get; init; }
 
     [Description("The day it was spent. Default today.")]
     public DateOnly? SpentOn { get; init; }
@@ -196,8 +196,8 @@ public sealed record SiteExpenseChangeInput
     [Description("An empty string removes it.")]
     public string? Note { get; init; }
 
-    [Description("materials, contractor, equipment, fees or other.")]
-    public SiteExpenseCategory? Category { get; init; }
+    [Description("One of Execution's expense categories' codes (the business keeps its own list, e.g. materials, contractor, fees, other).")]
+    public string? Category { get; init; }
 
     public DateOnly? SpentOn { get; init; }
 
@@ -379,7 +379,7 @@ public sealed class ProposeSiteExpenseStepTool(ISiteExpenseService siteExpenses,
                 SettingsText.Compare(edits, "Quantity", SiteExpenseText.Quantity(before), SiteExpenseText.Quantity(entry));
                 SettingsText.Compare(edits, "Cost", cost, MoneyText.Amount(SiteExpenseText.CostOf(entry), entry.Currency));
                 SettingsText.Compare(edits, "Supplier / payee", before.Supplier ?? "none", entry.Supplier ?? "none");
-                SettingsText.Compare(edits, "Category", SnakeCaseEnum.ToDb(expense.Category), SnakeCaseEnum.ToDb(entry.Category ?? expense.Category));
+                SettingsText.Compare(edits, "Category", expense.Category, entry.Category ?? expense.Category);
                 SettingsText.Compare(edits, "Spent on", ProjectText.Date(expense.SpentOn), ProjectText.Date(entry.SpentOn ?? expense.SpentOn));
                 SettingsText.Compare(edits, "Note", before.Note ?? "none", entry.Note ?? "none");
                 SettingsText.Compare(edits, "Account label", expense.AccountLabel?.Name ?? "none",
@@ -459,7 +459,7 @@ internal static class SiteExpenseText
     public static string Line(SiteExpenseEntryRequest e, decimal cost, IReadOnlyList<AccountLabelResponse> labels)
     {
         var worked = e.Quantity is { } q && e.UnitCost is { } unit ? $"{q:0.###} {e.Unit} × {MoneyText.Amount(unit, null)} = " : "";
-        var category = e.Category is { } c ? $", {SnakeCaseEnum.ToDb(c)}" : "";
+        var category = e.Category is { } c ? $", {c}" : "";
         var day = e.SpentOn is { } d ? $", {ProjectText.Date(d)}" : "";
         var label = e.AccountLabelId is not null ? $", under {LabelName(labels, e.AccountLabelId)}" : "";
         return $"{worked}{MoneyText.Amount(cost, e.Currency ?? "USD")}{category}{day}{label}";

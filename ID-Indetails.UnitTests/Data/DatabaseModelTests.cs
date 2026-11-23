@@ -16,11 +16,11 @@ public class DatabaseModelTests
         => Entity<T>().GetCheckConstraints().Select(c => c.ModelName).ToList();
 
     [Fact]
-    public void Model_has_all_109_tables_with_snake_case_names()
+    public void Model_has_all_110_tables_with_snake_case_names()
     {
         var tables = Model.GetEntityTypes().Select(e => e.GetTableName()!).ToList();
 
-        tables.Count.ShouldBe(109);
+        tables.Count.ShouldBe(110);
         tables.ShouldAllBe(t => t == t.ToLowerInvariant() && !t.Contains(' '));
     }
 
@@ -117,7 +117,8 @@ public class DatabaseModelTests
         CheckNames<Conversation>().ShouldContain("ck_conversations_shape");
         CheckNames<ProjectMeeting>().ShouldContain("ck_project_meetings_project_or_domain");
         CheckNames<LabourWeek>().ShouldContain("ck_labour_weeks_starts_on_monday");
-        CheckNames<SiteExpense>().ShouldContain("ck_site_expenses_category");
+        // a site expense's category is one of Execution's expense categories, checked by the API (23 November 2026)
+        CheckNames<SiteExpense>().ShouldNotContain("ck_site_expenses_category");
         CheckNames<ProjectFileComment>().ShouldContain("ck_project_file_comments_fixed");
         CheckNames<PortalComment>().ShouldContain("ck_portal_comments_body_unless_deleted");
         CheckNames<PortalMessage>().ShouldContain("ck_portal_messages_body_unless_deleted");

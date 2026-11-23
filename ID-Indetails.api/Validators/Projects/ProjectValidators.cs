@@ -220,8 +220,8 @@ public sealed class SetProjectBudgetRequestValidator : AbstractValidator<SetProj
                     .WithMessage("A line is a department or a category, not both.");
                 line.RuleFor(l => l.TeamId).GreaterThan(0).When(l => l.TeamId is not null).WithMessage("The department is invalid.");
                 line.RuleFor(l => l.Category)
-                    .Must(c => c is null || BudgetRules.AllCategories.Contains(c))
-                    .WithMessage($"The category must be one of {string.Join(", ", BudgetRules.AllCategories)}.");
+                    .Must(c => c is null || c.Length <= BudgetRules.MaxCategoryLength)
+                    .WithMessage($"The category is up to {BudgetRules.MaxCategoryLength} characters: the business's own categories are checked when it is saved.");
                 line.RuleFor(l => l.Amount)
                     .Amount("The amount")
                     .Must(a => a <= BudgetRules.MaxAmount).WithMessage("The amount can be at most 100,000,000 USD.");

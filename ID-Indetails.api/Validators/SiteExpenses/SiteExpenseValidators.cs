@@ -45,7 +45,8 @@ public sealed class SiteExpenseEntryRequestValidator : AbstractValidator<SiteExp
             .Must(c => c is null || MoneyRules.Currencies.Contains(c.ToUpperInvariant()))
             .WithMessage($"Currency must be one of: {string.Join(", ", MoneyRules.Currencies)}.");
         RuleFor(x => x.SpentOn).ThisCentury("The date");
-        RuleFor(x => x.Category).IsInEnum().WithMessage("Category must be materials, contractor, equipment, fees or other.");
+        // one of Execution's expense categories, checked when the expense is saved
+        RuleFor(x => x.Category).MaximumLength(20).WithMessage("Category is up to 20 characters.");
         RuleFor(x => x.AccountLabelId).GreaterThan(0).When(x => x.AccountLabelId is not null)
             .WithMessage("Choose one of the account labels.");
         RuleFor(x => x.Amount)

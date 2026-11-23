@@ -1361,6 +1361,52 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.ExpenseCategory", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DomainCode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)")
+                        .HasColumnName("domain_code");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("varchar(60)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int")
+                        .HasColumnName("sort_order");
+
+                    b.HasKey("Id")
+                        .HasName("pk_expense_categories");
+
+                    b.HasIndex("DomainCode", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_expense_categories_domain_code_code");
+
+                    b.ToTable("expense_categories", (string)null);
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.HourExcuse", b =>
                 {
                     b.Property<long>("Id")
@@ -6635,7 +6681,6 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             t.HasCheckConstraint("ck_site_expenses_amount_positive", "`amount` IS NULL OR `amount` > 0");
 
-                            t.HasCheckConstraint("ck_site_expenses_category", "`category` IN ('materials', 'contractor', 'equipment', 'fees', 'other')");
 
                             t.HasCheckConstraint("ck_site_expenses_has_cost", "(COALESCE(`quantity`, 0) > 0 AND COALESCE(`unit_cost`, 0) > 0) OR COALESCE(`amount`, 0) > 0");
 
@@ -8428,6 +8473,18 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasForeignKey("CreatedById")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_exchange_rates_users_created_by_id");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ExpenseCategory", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.Domain", "Domain")
+                        .WithMany()
+                        .HasForeignKey("DomainCode")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_expense_categories_domains_domain_code");
+
+                    b.Navigation("Domain");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.HourExcuse", b =>

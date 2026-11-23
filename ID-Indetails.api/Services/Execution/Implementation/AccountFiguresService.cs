@@ -14,6 +14,7 @@ using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Execution.Abstraction;
 using ID_Indetails.api.Services.Finance.Abstraction;
+using ID_Indetails.api.Repositories.Expenses.Abstraction;
 
 namespace ID_Indetails.api.Services.Execution.Implementation;
 
@@ -29,7 +30,8 @@ public sealed class AccountFiguresService(
     IProjectFinanceRepository financeSources,
     IAccountFiguresRepository figures,
     ISupervisionWithdrawalRepository withdrawals,
-    IAccountLabelRepository accountLabels) : IAccountFiguresService
+    IAccountLabelRepository accountLabels,
+    IExpenseCategoryRepository expenseCategories) : IAccountFiguresService
 {
     public async Task<AccountFiguresResponse> GetAsync(long projectId, CancellationToken cancellationToken = default)
     {
@@ -65,7 +67,8 @@ public sealed class AccountFiguresService(
             payments.Select(p => new AccountFiguresRules.PaymentRow(p.AccountLabelId, p.AmountUsd)).ToList(),
             expenses
                 .Select(e => new AccountFiguresRules.ExpenseRow(e.AccountLabelId, e.Category, e.Supplier, rates.ToUsd(e.Total, e.Currency, e.SpentOn)))
-                .ToList()));
+                .ToList(),
+            (await expenseCategories.ListAsync(DomainCodes.Execution, cancellationToken)).Select(c => c.Code).ToList()));
 
         var labelNames = labels.ToDictionary(l => l.Id, l => l.Name);
         return new AccountFiguresResponse(

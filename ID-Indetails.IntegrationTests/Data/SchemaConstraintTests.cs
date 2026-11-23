@@ -239,7 +239,7 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
     }
 
     [Fact]
-    public async Task A_site_expense_is_materials_unless_it_says_otherwise_and_has_a_known_category()
+    public async Task A_site_expense_is_materials_unless_it_says_otherwise()
     {
         var user = await ActiveUserAsync("execution");
         var project = await SiteProjectAsync(user);
@@ -252,7 +252,7 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
             await InsertAsync(SiteExpenseSql(project, user, quantity: "NULL", unitCost: "NULL", amount: "10", category: category));
         }
 
-        await ShouldViolateAsync(SiteExpenseSql(project, user, quantity: "NULL", unitCost: "NULL", amount: "10", category: "luxury"), "ck_site_expenses_category");
+        // which categories there are is the business's own list (expense_categories), checked by the API
     }
 
     [Fact]

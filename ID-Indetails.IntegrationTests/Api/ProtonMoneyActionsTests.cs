@@ -204,7 +204,7 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         corrected.Note.ShouldBe("Grey");
         // what the correction didn't name stays, the day and the category included
         corrected.SpentOn.ShouldBe(new DateOnly(2026, 9, 20));
-        corrected.Category.ShouldBe(SiteExpenseCategory.Materials);
+        corrected.Category.ShouldBe("materials");
 
         // the note changes in the app before Confirm: the card would put the old one back, so it is refused
         var (supplier, _) = await ProposeAsync(superAdmin, "propose_site_expense_step",
@@ -494,7 +494,7 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
 
         // what was recorded is cost: the price the client pays is in the BOQs, which Proton doesn't write
         (await GetAsync<SiteExpenseListResponse>(superAdmin, $"/api/projects/{site.Id}/site-expenses")).Items.Select(e => e.Category)
-            .Order().ShouldBe([SiteExpenseCategory.Materials, SiteExpenseCategory.Contractor]);
+            .Order().ShouldBe(["contractor", "materials"]);
         var money = (await GetAsync<ProjectResponse>(superAdmin, $"/api/projects/{site.Id}")).Money!;
         money.Cost.SiteExpenses.ShouldBe(200m);
         money.Cost.GroundLabour.ShouldBe(75m);

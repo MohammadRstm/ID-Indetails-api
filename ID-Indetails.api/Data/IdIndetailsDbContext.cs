@@ -143,6 +143,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<ConversationRead> ConversationReads => Set<ConversationRead>();
     public DbSet<MessageRead> MessageReads => Set<MessageRead>();
     public DbSet<ReopenedMonth> ReopenedMonths => Set<ReopenedMonth>();
+    public DbSet<ExpenseCategory> ExpenseCategories => Set<ExpenseCategory>();
     public DbSet<StoredFile> Files => Set<StoredFile>();
     public DbSet<UserBoardLayout> UserBoardLayouts => Set<UserBoardLayout>();
     public DbSet<UserDevice> UserDevices => Set<UserDevice>();
@@ -196,7 +197,6 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<BoqStatus>(configurationBuilder);
         StoreAsSnakeCase<BoqAdjustmentType>(configurationBuilder);
         StoreAsSnakeCase<BoqLineNature>(configurationBuilder);
-        StoreAsSnakeCase<SiteExpenseCategory>(configurationBuilder);
         StoreAsSnakeCase<PermissionEffect>(configurationBuilder);
         StoreAsSnakeCase<ProtonOutcome>(configurationBuilder);
         StoreAsSnakeCase<ProtonChannel>(configurationBuilder);

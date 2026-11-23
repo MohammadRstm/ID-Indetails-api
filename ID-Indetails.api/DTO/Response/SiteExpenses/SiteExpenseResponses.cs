@@ -30,7 +30,7 @@ public sealed record SiteExpenseResponse
     /// <summary>The day the money was spent: what the cost is dated by.</summary>
     public DateOnly SpentOn { get; init; }
 
-    public SiteExpenseCategory Category { get; init; }
+    public string Category { get; init; } = "";
 
     public AccountLabelRefResponse? AccountLabel { get; init; }
 

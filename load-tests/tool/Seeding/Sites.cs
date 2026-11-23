@@ -55,7 +55,7 @@ public sealed class Sites(World world, ApiClient api, SimulatedClock clock)
                 items.Add(new NewSiteExpenseRequest
                 {
                     Name = name, Amount = Random.Amount(100m, 3000m, 10m), Supplier = Random.Pick(Vocabulary.Suppliers), Note = "LT lump sum",
-                    Category = Random.Chance(0.5) ? SiteExpenseCategory.Contractor : null,
+                    Category = Random.Chance(0.5) ? "contractor" : null,
                 });
             }
             else
