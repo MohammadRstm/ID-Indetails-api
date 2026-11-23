@@ -95,14 +95,41 @@ public class WorkEntryRulesTests
         // 1 September 2026 begins at 21:00 UTC on 31 August in Beirut.
         var monthStart = new DateTime(2026, 8, 31, 21, 0, 0, DateTimeKind.Utc);
 
-        WorkEntryRules.IsInOpenMonth(monthStart, monthStart).ShouldBeTrue();
-        WorkEntryRules.IsInOpenMonth(monthStart.AddMinutes(-1), monthStart).ShouldBeFalse();
-        WorkEntryRules.CheckOpenMonth(monthStart, monthStart.AddDays(2)).ShouldBeNull();
-        WorkEntryRules.CheckOpenMonth(monthStart, monthStart.AddMinutes(-1))!.Code.ShouldBe(ErrorCodes.MonthClosed);
+        var open = new OpenMonths(monthStart, []);
+
+        open.IsOpen(monthStart).ShouldBeTrue();
+        open.IsOpen(monthStart.AddMinutes(-1)).ShouldBeFalse();
+        WorkEntryRules.CheckOpenMonth(open, monthStart.AddDays(2)).ShouldBeNull();
+        WorkEntryRules.CheckOpenMonth(open, monthStart.AddMinutes(-1))!.Code.ShouldBe(ErrorCodes.MonthClosed);
 
         // A move is refused when either its current or its new start is in a closed month.
-        WorkEntryRules.CheckOpenMonth(monthStart, monthStart.AddDays(2), monthStart.AddDays(-2))!.Code.ShouldBe(ErrorCodes.MonthClosed);
-        WorkEntryRules.CheckOpenMonth(monthStart, monthStart.AddDays(-2), monthStart.AddDays(2))!.Kind.ShouldBe(ID_Indetails.api.Business.Common.DenialKind.BusinessRule);
+        WorkEntryRules.CheckOpenMonth(open, monthStart.AddDays(2), monthStart.AddDays(-2))!.Code.ShouldBe(ErrorCodes.MonthClosed);
+        WorkEntryRules.CheckOpenMonth(open, monthStart.AddDays(-2), monthStart.AddDays(2))!.Kind.ShouldBe(ID_Indetails.api.Business.Common.DenialKind.BusinessRule);
+    }
+
+    [Fact]
+    public void A_reopened_month_takes_work_while_it_stays_open()
+    {
+        // September 2026 reopened: from 31 August 21:00 UTC to 30 September 21:00 UTC; the open month is November
+        var september = new OpenMonths.Window(new DateTime(2026, 8, 31, 21, 0, 0, DateTimeKind.Utc), new DateTime(2026, 9, 30, 21, 0, 0, DateTimeKind.Utc));
+        var open = new OpenMonths(new DateTime(2026, 10, 31, 22, 0, 0, DateTimeKind.Utc), [september]);
+
+        open.IsOpen(september.FromUtc.AddDays(10)).ShouldBeTrue();
+        open.IsOpen(september.ToUtc.AddDays(10)).ShouldBeFalse();
+        open.IsOpen(september.FromUtc.AddMinutes(-1)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Only_a_closed_month_is_reopened_and_until_today_or_later()
+    {
+        var today = new DateOnly(2026, 11, 23);
+        ReopenRules.Check(new DateOnly(2026, 9, 1), today, today).ShouldBeNull();
+        ReopenRules.Check(new DateOnly(2026, 10, 1), new DateOnly(2026, 12, 31), today).ShouldBeNull();
+        ReopenRules.Check(new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 30), today)!.Code.ShouldBe(ErrorCodes.MonthNotClosed);
+        ReopenRules.Check(new DateOnly(2026, 10, 1), new DateOnly(2026, 11, 22), today)!.Code.ShouldBe(ErrorCodes.ReopenUntilInPast);
+        ReopenRules.Check(new DateOnly(2026, 10, 5), today, today)!.Code.ShouldBe(ErrorCodes.ValidationFailed);
+        // the month just ended stays open through the 1st, so it isn't closed yet
+        ReopenRules.Check(new DateOnly(2026, 10, 1), new DateOnly(2026, 11, 5), new DateOnly(2026, 11, 1))!.Code.ShouldBe(ErrorCodes.MonthNotClosed);
     }
 
     [Theory]

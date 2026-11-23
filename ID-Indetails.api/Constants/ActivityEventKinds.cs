@@ -209,6 +209,13 @@ public static class ActivityEventKinds
     public const string HoursExcused = "hours_excused";
     public const string HoursExcuseRemoved = "hours_excuse_removed";
 
+    /// <summary>Hours were logged where an excuse stood in for them, and the excuse gave way (actor: who logged).</summary>
+    public const string HoursExcuseReduced = "hours_excuse_reduced";
+
+    // Closed months reopened for logging (company-level; subject: none, the month and the day it stays open until in the payload)
+    public const string MonthReopened = "month_reopened";
+    public const string MonthReopenEnded = "month_reopen_ended";
+
     // Time off (subject: the person; the request, its days and whether it is paid in the payload). Only those who decide time off see them.
     public const string TimeOffRequested = "time_off_requested";
     public const string TimeOffWithdrawn = "time_off_withdrawn";

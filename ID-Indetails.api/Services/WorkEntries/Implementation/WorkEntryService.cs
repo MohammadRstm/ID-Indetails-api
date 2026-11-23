@@ -30,8 +30,10 @@ namespace ID_Indetails.api.Services.WorkEntries.Implementation;
 /// <summary>
 /// People log only their own work, and only on Design projects (see <see cref="WorkEntryRules"/>).
 /// Someone else's entry reads as not found. Each change locks the person's user row, so overlap
-/// checks of two simultaneous changes run one after the other. Work in a closed month never changes, no hours land on a
-/// day of time off, and someone on time off changes none (<see cref="ITimeOffWatch.CheckHoursAsync"/>).
+/// checks of two simultaneous changes run one after the other. Work in a closed month never changes unless a super admin
+/// reopened it for logging (<see cref="IOpenMonths"/>), no hours land on a day of time off, and someone on time off
+/// changes none (<see cref="ITimeOffWatch.CheckHoursAsync"/>). New work gives way to an excuse that stood in for it
+/// (<see cref="IExcuseTrimmer"/>).
 /// </summary>
 public sealed class WorkEntryService(
     ICurrentUser currentUser,
@@ -49,6 +51,8 @@ public sealed class WorkEntryService(
     IProfitFloor floor,
     ITimeOffWatch timeOff,
     IBlockedChangeRepository blockedChanges,
+    IOpenMonths openMonths,
+    IExcuseTrimmer excuseTrim,
     IClock clock) : IWorkEntryService
 {
     public bool LetOutsideDepartment { get; set; }
@@ -77,7 +81,7 @@ public sealed class WorkEntryService(
             OutsideScope = request.OutsideScope ?? false,
         };
         Throw(WorkEntryRules.CheckEntry(entry.Description, entry.EndedAt, clock.UtcNow, settings.RequireDescription, settings.AllowFutureEntries));
-        Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.OpenFromUtc(clock), entry.StartedAt));
+        Throw(WorkEntryRules.CheckOpenMonth(await openMonths.CurrentAsync(cancellationToken), entry.StartedAt));
 
         await DeleteOthersAsync(actor, request.Deletes, settings, cancellationToken);
         var moved = await ApplyMovesAsync(actor, request.Moves, settings, cancellationToken);
@@ -85,6 +89,7 @@ public sealed class WorkEntryService(
 
         entries.Add(entry);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await excuseTrim.TrimAsync(entry.UserId, entry.StartedAt, entry.EndedAt, actor.UserId, cancellationToken);
 
         activity.Add(EntryEvent(entry, ActivityEventKinds.WorkEntryLogged, actor.UserId));
         AddMoveEvents(moved, actor.UserId);
@@ -110,7 +115,7 @@ public sealed class WorkEntryService(
             Throw(RuleDenial.Invalid(ErrorCodes.ValidationFailed, "deletes", "The entry being saved can't be deleted with it."));
         }
 
-        Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.OpenFromUtc(clock), entry.StartedAt, WorkEntryRules.AsUtc(request.StartedAt)));
+        Throw(WorkEntryRules.CheckOpenMonth(await openMonths.CurrentAsync(cancellationToken), entry.StartedAt, WorkEntryRules.AsUtc(request.StartedAt)));
         Throw(WorkEntryRules.CheckChangeable(entry.CreatedAt, clock.UtcNow, settings.EditWindow, entry.Project.Status, settings.HoldLogging));
         var project = entry.ProjectId == request.ProjectId
             ? entry.Project
@@ -163,7 +168,7 @@ public sealed class WorkEntryService(
             throw new NotFoundException("Work entry not found.");
         }
 
-        Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.OpenFromUtc(clock), entry.StartedAt));
+        Throw(WorkEntryRules.CheckOpenMonth(await openMonths.CurrentAsync(cancellationToken), entry.StartedAt));
         if (entry.OutsideScope != request.OutsideScope)
         {
             entry.OutsideScope = request.OutsideScope;
@@ -184,7 +189,7 @@ public sealed class WorkEntryService(
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
 
         var entry = Own(actor, await entries.GetForUpdateAsync(id, cancellationToken));
-        Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.OpenFromUtc(clock), entry.StartedAt));
+        Throw(WorkEntryRules.CheckOpenMonth(await openMonths.CurrentAsync(cancellationToken), entry.StartedAt));
         Throw(WorkEntryRules.CheckChangeable(entry.CreatedAt, clock.UtcNow, settings.EditWindow, entry.Project.Status, settings.HoldLogging));
 
         entry.DeletedAt = clock.UtcNow;
@@ -202,7 +207,7 @@ public sealed class WorkEntryService(
 
         var entry = Own(actor, await entries.GetDeletedForUpdateAsync(id, cancellationToken));
         await timeOff.CheckHoursAsync(actor.UserId, DaysOf(entry.StartedAt, entry.EndedAt), cancellationToken);
-        Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.OpenFromUtc(clock), entry.StartedAt));
+        Throw(WorkEntryRules.CheckOpenMonth(await openMonths.CurrentAsync(cancellationToken), entry.StartedAt));
         Throw(WorkEntryRules.CheckChangeable(entry.CreatedAt, clock.UtcNow, settings.EditWindow, entry.Project.Status, settings.HoldLogging));
         await CheckOverlapAsync(actor.UserId, [SpanOf(entry)], settings, cancellationToken);
 
@@ -297,7 +302,7 @@ public sealed class WorkEntryService(
         foreach (var id in ids)
         {
             var entry = tracked.SingleOrDefault(e => e.Id == id) ?? throw new NotFoundException("Work entry not found.");
-            Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.OpenFromUtc(clock), entry.StartedAt));
+            Throw(WorkEntryRules.CheckOpenMonth(await openMonths.CurrentAsync(cancellationToken), entry.StartedAt));
             Throw(WorkEntryRules.CheckChangeable(entry.CreatedAt, clock.UtcNow, settings.EditWindow, entry.Project.Status, settings.HoldLogging));
 
             entry.DeletedAt = clock.UtcNow;
@@ -323,7 +328,7 @@ public sealed class WorkEntryService(
         foreach (var move in moves)
         {
             var entry = tracked.SingleOrDefault(e => e.Id == move.Id) ?? throw new NotFoundException("Work entry not found.");
-            Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.OpenFromUtc(clock), entry.StartedAt, WorkEntryRules.AsUtc(move.StartedAt)));
+            Throw(WorkEntryRules.CheckOpenMonth(await openMonths.CurrentAsync(cancellationToken), entry.StartedAt, WorkEntryRules.AsUtc(move.StartedAt)));
             Throw(WorkEntryRules.CheckChangeable(entry.CreatedAt, clock.UtcNow, settings.EditWindow, entry.Project.Status, settings.HoldLogging));
 
             entry.StartedAt = WorkEntryRules.AsUtc(move.StartedAt);
@@ -367,7 +372,8 @@ public sealed class WorkEntryService(
     private async Task<WorkEntryResponse> DescribeAsync(long id, UserAccess actor, DomainSettings settings, CancellationToken cancellationToken)
     {
         var view = await entries.GetViewAsync(id, cancellationToken) ?? throw new NotFoundException("Work entry not found.");
-        return WorkEntryMapper.ToResponse(view, actor.UserId, settings, clock, await overtime.OvertimeOfAsync([view], cancellationToken));
+        return WorkEntryMapper.ToResponse(
+            view, actor.UserId, settings, clock, await overtime.OvertimeOfAsync([view], cancellationToken), await openMonths.CurrentAsync(cancellationToken));
     }
 
     private ActivityEvent EntryEvent(WorkEntry entry, string kind, long actorId) => new()

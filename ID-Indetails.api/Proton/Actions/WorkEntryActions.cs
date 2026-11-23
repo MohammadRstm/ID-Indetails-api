@@ -422,7 +422,7 @@ public sealed record SetWorkEntryScopeInput : ProtonActionInput
 /// An admin's correction of whether someone's entry is outside the project's original scope, through
 /// PUT /api/work-entries/{id}/scope once confirmed: after the edit window too, but never in a closed month.
 /// </summary>
-public sealed class ProposeSetWorkEntryScopeTool(IWorkEntryQueryService queries, IWorkEntryService workEntries, IClock clock)
+public sealed class ProposeSetWorkEntryScopeTool(IWorkEntryQueryService queries, IWorkEntryService workEntries, IOpenMonths openMonths, IClock clock)
     : ProtonActionTool<SetWorkEntryScopeInput, SetWorkEntryScopeArgs>
 {
     public override string Name => "propose_set_work_entry_scope";
@@ -442,7 +442,7 @@ public sealed class ProposeSetWorkEntryScopeTool(IWorkEntryQueryService queries,
         SetWorkEntryScopeInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
         var entry = (await queries.GetAsync(input.WorkEntryId, cancellationToken)).Entry;
-        WorkEntryRules.CheckOpenMonth(clock.CompanyDayStartUtc(WorkEntryRules.OpenFrom(clock.CompanyToday)), entry.StartedAt).ThrowIfDenied();
+        WorkEntryRules.CheckOpenMonth(await openMonths.CurrentAsync(cancellationToken), entry.StartedAt).ThrowIfDenied();
         if (entry.OutsideScope == input.OutsideScope)
         {
             throw new ProtonToolInputException(input.OutsideScope ? "That entry is already marked as outside the scope." : "That entry is already inside the scope.");

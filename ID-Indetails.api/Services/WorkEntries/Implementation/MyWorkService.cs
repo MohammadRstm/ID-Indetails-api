@@ -6,9 +6,11 @@ using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.WorkEntries;
 using ID_Indetails.api.DTO.Response.WorkEntries;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Meetings.Abstraction;
+using ID_Indetails.api.Repositories.Payroll.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
@@ -35,6 +37,8 @@ public sealed class MyWorkService(
     IMeetingRepository meetings,
     IOvertimeService overtime,
     IBlockedChangeRepository blockedChanges,
+    IPayrollRepository payroll,
+    IOpenMonths openMonths,
     IClock clock) : IMyWorkService
 {
     public const int SummaryWeeks = 16;
@@ -132,6 +136,7 @@ public sealed class MyWorkService(
         var myWorked = mine.Select(ToWorked).ToList();
         var overtimeById = await overtime.OvertimeOfAsync(mine, cancellationToken);
 
+        var open = await openMonths.CurrentAsync(cancellationToken);
         return new MyProjectWorkResponse(
             projectId,
             WorkEntryRules.AcceptsWork(project.Status, settings.HoldLogging),
@@ -142,7 +147,7 @@ public sealed class MyWorkService(
             total.People,
             total.Minutes,
             mine.OrderByDescending(e => e.StartedAt).Take(RecentOnProject)
-                .Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, overtimeById)).ToList(),
+                .Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, overtimeById, open)).ToList(),
             ToWeeks(WorkStats.Weekly(myWorked, today, WeeksOnProject, calendar.FirstDayOfWeek)),
             team.Select(e => new TeamActivityResponse(e.UserId, e.UserName, e.StartedAt, e.Description)).ToList());
     }
@@ -166,18 +171,30 @@ public sealed class MyWorkService(
                 cancellationToken)
             : [];
 
+        var open = await openMonths.CurrentAsync(cancellationToken);
         return new MyDayResponse(
             day,
             mine.Sum(e => e.Minutes),
             mine.Sum(e => overtimeById.GetValueOrDefault(e.Id)),
-            mine.Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, overtimeById)).ToList(),
+            mine.Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, overtimeById, open)).ToList(),
             domainMeetings.Select(MeetingMapper.ToResponse).ToList(),
             (await blockedChanges.WaitingHoursAsync(actor.UserId, cancellationToken))
                 .Select(w => (w, Request: WaitingHours.Of(w.Change, ProfitFloor.Json)))
                 .Where(x => x.Request is { } r && WorkEntryRules.AsUtc(r.StartedAt) < to && WorkEntryRules.AsUtc(r.EndedAt) > from)
                 .Select(x => new WaitingHoursResponse(x.w.Change.Id, x.w.Change.ProjectId, x.w.ProjectTitle, x.Request!.Description ?? string.Empty,
                     WorkEntryRules.AsUtc(x.Request.StartedAt), WorkEntryRules.AsUtc(x.Request.EndedAt)))
-                .ToList());
+                .ToList(),
+            await ExcuseOnAsync(actor.UserId, day, cancellationToken));
+    }
+
+    /// <summary>The caller's own excuses that logging on the day affects (they see them on their time page too).</summary>
+    private async Task<DayExcuseResponse?> ExcuseOnAsync(long userId, DateOnly day, CancellationToken cancellationToken)
+    {
+        var excuses = await payroll.ExcusesAsync([userId], [new DateOnly(day.Year, day.Month, 1)], cancellationToken);
+        var onDay = excuses.Any(e => e.Kind == ExcuseKind.Days && e.Days.Any(d => d.Day == day));
+        var minutes = excuses.Where(e => e.Kind == ExcuseKind.Minutes).Sum(e => e.Minutes ?? 0);
+        var whole = excuses.Any(e => e.Kind == ExcuseKind.WholeMonth);
+        return onDay || minutes > 0 || whole ? new DayExcuseResponse(onDay, minutes, whole) : null;
     }
 
     private Task<UserAccess> ActorAsync(CancellationToken cancellationToken) => permissions.GetAccessAsync(currentUser.Id, cancellationToken);

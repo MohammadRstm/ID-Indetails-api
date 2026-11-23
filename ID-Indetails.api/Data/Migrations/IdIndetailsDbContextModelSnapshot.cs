@@ -5714,6 +5714,40 @@ namespace ID_Indetails.api.Data.Migrations
                     b.ToTable("requirement_assignees", (string)null);
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.ReopenedMonth", b =>
+                {
+                    b.Property<DateOnly>("Month")
+                        .HasColumnType("date")
+                        .HasColumnName("month");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("note");
+
+                    b.Property<DateOnly>("OpenUntil")
+                        .HasColumnType("date")
+                        .HasColumnName("open_until");
+
+                    b.Property<DateTime>("ReopenedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("reopened_at");
+
+                    b.Property<long>("ReopenedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("reopened_by_id");
+
+                    b.HasKey("Month")
+                        .HasName("pk_reopened_months");
+
+                    b.HasIndex("ReopenedById")
+                        .HasDatabaseName("ix_reopened_months_reopened_by_id");
+
+                    b.ToTable("reopened_months", (string)null);
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.Role", b =>
                 {
                     b.Property<string>("Code")
@@ -9590,6 +9624,18 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasConstraintName("fk_refresh_tokens_users_user_id");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ReopenedMonth", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", "ReopenedBy")
+                        .WithMany()
+                        .HasForeignKey("ReopenedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_reopened_months_users_reopened_by_id");
+
+                    b.Navigation("ReopenedBy");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.RequirementAssignee", b =>

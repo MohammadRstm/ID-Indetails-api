@@ -247,6 +247,8 @@ public static class ProtonCoverage
         Action("Schedules.Set", "propose_schedule", T2, ProtonFamily.PayRules),
         Action("HourExcuses.Add", "propose_hour_excuse", T2, ProtonFamily.PayRules),
         Action("HourExcuses.Delete", "propose_hour_excuse", T2, ProtonFamily.PayRules),
+        Open("ReopenedMonths.Reopen", "a super admin reopens a closed month for logging on Company › Settings; Proton doesn't do it yet"),
+        Open("ReopenedMonths.End", "a super admin locks a reopened month again on Company › Settings; Proton doesn't do it yet"),
 
         // Time off: not in Proton yet (the user's decision, 9 Nov 2026); the pages are in the app
         Open("MeTimeOff.Ask", "time off is asked for on the Time off page; Proton doesn't ask for it yet"),

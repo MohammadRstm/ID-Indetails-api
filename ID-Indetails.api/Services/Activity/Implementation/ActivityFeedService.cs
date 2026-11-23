@@ -16,6 +16,7 @@ using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Payroll.Abstraction;
 using ID_Indetails.api.Services.Settings.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Implementation;
+using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
 namespace ID_Indetails.api.Services.Activity.Implementation;
 
@@ -32,6 +33,7 @@ public sealed class ActivityFeedService(
     IWorkEntryRepository entries,
     IDomainSettingsService domainSettings,
     IOvertimeService overtime,
+    IOpenMonths openMonths,
     IClock clock) : IActivityFeedService
 {
     public async Task<PagedResponse<ActivityItemResponse>> ListAsync(ActivityListQuery query, CancellationToken cancellationToken = default)
@@ -50,6 +52,7 @@ public sealed class ActivityFeedService(
         var overtimeById = await overtime.OvertimeOfAsync(work.Values, cancellationToken);
         var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);
 
+        var open = await openMonths.CurrentAsync(cancellationToken);
         return new PagedResponse<ActivityItemResponse>(
             items.Select(e => new ActivityItemResponse(
                 e.Id,
@@ -69,7 +72,7 @@ public sealed class ActivityFeedService(
                     ? null
                     : JsonDocument.Parse(e.Payload).RootElement.Clone(),
                 e.SubjectType == "work_entry" && e.SubjectId is { } id && work.TryGetValue(id, out var entry)
-                    ? WorkEntryMapper.ToResponse(entry, actor.UserId, settings, clock, overtimeById)
+                    ? WorkEntryMapper.ToResponse(entry, actor.UserId, settings, clock, overtimeById, open)
                     : null,
                 e.IsDemo)).ToList(),
             query.Page,
@@ -104,7 +107,7 @@ public sealed class ActivityFeedService(
         var hidden = new List<string>(actor.Has(PermissionCodes.WorkEntryViewAll) ? [] : ActivityGroups.KindsOf(ActivityGroup.Work));
         if (!actor.Has(PermissionCodes.SalaryView))
         {
-            hidden.AddRange([ActivityEventKinds.HoursExcused, ActivityEventKinds.HoursExcuseRemoved]);
+            hidden.AddRange([ActivityEventKinds.HoursExcused, ActivityEventKinds.HoursExcuseRemoved, ActivityEventKinds.HoursExcuseReduced]);
         }
 
         // why someone is off, and whether it is paid, are the super admins'

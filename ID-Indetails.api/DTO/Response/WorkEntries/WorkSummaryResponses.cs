@@ -107,7 +107,14 @@ public sealed record MyDayResponse(
     int OvertimeMinutes,
     IReadOnlyList<WorkEntryResponse> Entries,
     IReadOnlyList<MeetingResponse> Meetings,
-    IReadOnlyList<WaitingHoursResponse> Waiting);
+    IReadOnlyList<WaitingHoursResponse> Waiting,
+    DayExcuseResponse? Excuse = null);
+
+/// <summary>
+/// The caller's excuses that logging on this day affects, for the log window's warning: the day excused (<paramref name="Day"/>),
+/// minutes excused in its month, or the whole month. Null when there are none.
+/// </summary>
+public sealed record DayExcuseResponse(bool Day, int MonthMinutes, bool WholeMonth);
 
 /// <summary>Hours waiting for approval: the blocked change's id, the project, what was said and when.</summary>
 public sealed record WaitingHoursResponse(long Id, long ProjectId, string ProjectTitle, string Description, DateTime StartedAt, DateTime EndedAt);

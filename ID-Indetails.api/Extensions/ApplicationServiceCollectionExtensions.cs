@@ -226,6 +226,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ICompanyFinanceRepository, CompanyFinanceRepository>();
         services.AddScoped<IPayrollRepository, PayrollRepository>();
         services.AddScoped<IHourExcuseRepository, HourExcuseRepository>();
+        services.AddScoped<IReopenedMonthRepository, ReopenedMonthRepository>();
         services.AddScoped<ITimeOffRepository, TimeOffRepository>();
         services.AddScoped<ISalaryAdvanceRepository, SalaryAdvanceRepository>();
         services.AddScoped<IClientRepository, ClientRepository>();
@@ -314,6 +315,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ISalaryService, SalaryService>();
         services.AddScoped<IMyTimeService, MyTimeService>();
         services.AddScoped<IHourExcuseService, HourExcuseService>();
+        services.AddScoped<IExcuseTrimmer, ExcuseTrimmer>();
         services.AddScoped<ITimeOffService, TimeOffService>();
         services.AddScoped<ISalaryAdvanceSchedules, SalaryAdvanceSchedules>();
         services.AddScoped<IPayChangeEffects, PayChangeEffects>();
@@ -349,6 +351,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IDomainSettingsService, DomainSettingsService>();
         services.AddScoped<IWorkLogNotifier, WorkLogNotifier>();
         services.AddScoped<IWorkEntryService, WorkEntryService>();
+        services.AddScoped<IOpenMonths, OpenMonthsService>();
+        services.AddScoped<IReopenedMonthService, ReopenedMonthService>();
         services.AddScoped<IWorkEntryQueryService, WorkEntryQueryService>();
         services.AddScoped<IWorkEntryCommentService, WorkEntryCommentService>();
         services.AddScoped<IMyWorkService, MyWorkService>();
