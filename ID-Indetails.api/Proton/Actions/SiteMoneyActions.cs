@@ -379,7 +379,7 @@ public sealed class ProposeSiteExpenseStepTool(ISiteExpenseService siteExpenses,
                 SettingsText.Compare(edits, "Quantity", SiteExpenseText.Quantity(before), SiteExpenseText.Quantity(entry));
                 SettingsText.Compare(edits, "Cost", cost, MoneyText.Amount(SiteExpenseText.CostOf(entry), entry.Currency));
                 SettingsText.Compare(edits, "Supplier / payee", before.Supplier ?? "none", entry.Supplier ?? "none");
-                SettingsText.Compare(edits, "Category", SnakeCaseEnum.ToDb(expense.Category), SnakeCaseEnum.ToDb(entry.Category ?? expense.Category));
+                SettingsText.Compare(edits, "Category", expense.Category, entry.Category ?? expense.Category);
                 SettingsText.Compare(edits, "Spent on", ProjectText.Date(expense.SpentOn), ProjectText.Date(entry.SpentOn ?? expense.SpentOn));
                 SettingsText.Compare(edits, "Note", before.Note ?? "none", entry.Note ?? "none");
                 SettingsText.Compare(edits, "Account label", expense.AccountLabel?.Name ?? "none",
