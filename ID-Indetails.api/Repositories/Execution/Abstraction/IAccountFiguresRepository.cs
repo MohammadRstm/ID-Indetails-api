@@ -8,7 +8,7 @@ public sealed record AccountPaymentRow(long? AccountLabelId, decimal AmountUsd);
 /// <summary>A site expense as recorded: in its own currency, on the day it was spent.</summary>
 public sealed record AccountExpenseRow(
     long? AccountLabelId,
-    SiteExpenseCategory Category,
+    string Category,
     string? Supplier,
     string Currency,
     decimal Total,

@@ -18,7 +18,7 @@ public class AccountFiguresRulesTests
     private static PaymentRow Paid(decimal amount, long? label = null) => new(label, amount);
 
     private static ExpenseRow Spent(
-        decimal? usd, long? label = null, SiteExpenseCategory category = SiteExpenseCategory.Materials, string? payee = null)
+        decimal? usd, long? label = null, string category = "materials", string? payee = null)
         => new(label, category, payee, usd);
 
     private static Inputs Account(
@@ -218,18 +218,18 @@ public class AccountFiguresRulesTests
     {
         var figures = Build(Account(expenses:
         [
-            Spent(300, category: SiteExpenseCategory.Fees),
-            Spent(900, category: SiteExpenseCategory.Materials),
-            Spent(250, category: SiteExpenseCategory.Fees),
-            Spent(550, category: SiteExpenseCategory.Contractor),
-            Spent(null, category: SiteExpenseCategory.Equipment),
+            Spent(300, category: "fees"),
+            Spent(900, category: "materials"),
+            Spent(250, category: "fees"),
+            Spent(550, category: "contractor"),
+            Spent(null, category: "equipment"),
         ]));
 
         figures.ByCategory.ShouldBe(
         [
-            new CategoryRow(SiteExpenseCategory.Materials, 900),
-            new CategoryRow(SiteExpenseCategory.Contractor, 550),
-            new CategoryRow(SiteExpenseCategory.Fees, 550),
+            new CategoryRow("materials", 900),
+            new CategoryRow("contractor", 550),
+            new CategoryRow("fees", 550),
         ],
         customMessage: "equal totals keep the categories' own order (contractor before fees), so the order never flickers");
     }
@@ -239,13 +239,13 @@ public class AccountFiguresRulesTests
     {
         var figures = Build(Account(expenses:
         [
-            Spent(100, category: SiteExpenseCategory.Other),
-            Spent(100, category: SiteExpenseCategory.Contractor),
-            Spent(100, category: SiteExpenseCategory.Materials),
+            Spent(100, category: "other"),
+            Spent(100, category: "contractor"),
+            Spent(100, category: "materials"),
         ]));
 
         figures.ByCategory.Select(c => c.Category).ShouldBe(
-            [SiteExpenseCategory.Materials, SiteExpenseCategory.Contractor, SiteExpenseCategory.Other]);
+            ["materials", "contractor", "other"]);
     }
 
     [Fact]
@@ -266,9 +266,9 @@ public class AccountFiguresRulesTests
         // none of these had a label, and all are materials
         figures.ByPayee.SelectMany(p => p.Splits).ShouldBe(
         [
-            new PayeeSplit(SiteExpenseCategory.Materials, null, 1_000),
-            new PayeeSplit(SiteExpenseCategory.Materials, null, 650),
-            new PayeeSplit(SiteExpenseCategory.Materials, null, 100),
+            new PayeeSplit("materials", null, 1_000),
+            new PayeeSplit("materials", null, 650),
+            new PayeeSplit("materials", null, 100),
         ]);
     }
 
@@ -290,10 +290,10 @@ public class AccountFiguresRulesTests
     {
         var figures = Build(Account(expenses:
         [
-            Spent(120.25m, Concrete, SiteExpenseCategory.Materials, "A"),
-            Spent(79.75m, null, SiteExpenseCategory.Fees, "B"),
-            Spent(300, Finishing, SiteExpenseCategory.Contractor, null),
-            Spent(null, Finishing, SiteExpenseCategory.Contractor, "C"),
+            Spent(120.25m, Concrete, "materials", "A"),
+            Spent(79.75m, null, "fees", "B"),
+            Spent(300, Finishing, "contractor", null),
+            Spent(null, Finishing, "contractor", "C"),
         ]));
 
         figures.ByCategory.Sum(c => c.Spent).ShouldBe(500);
@@ -305,22 +305,22 @@ public class AccountFiguresRulesTests
     {
         var figures = Build(Account(expenses:
         [
-            Spent(400, Concrete, SiteExpenseCategory.Materials, "  Al-Rashid Steel "),
-            Spent(250, Concrete, SiteExpenseCategory.Materials, "al-rashid  steel"),
-            Spent(900, Finishing, SiteExpenseCategory.Contractor, "Al-Rashid Steel"),
-            Spent(30, null, SiteExpenseCategory.Materials, "Al-Rashid Steel"),
-            Spent(100, null, SiteExpenseCategory.Fees, null),
+            Spent(400, Concrete, "materials", "  Al-Rashid Steel "),
+            Spent(250, Concrete, "materials", "al-rashid  steel"),
+            Spent(900, Finishing, "contractor", "Al-Rashid Steel"),
+            Spent(30, null, "materials", "Al-Rashid Steel"),
+            Spent(100, null, "fees", null),
         ]));
 
         var steel = figures.ByPayee[0];
         steel.Payee.ShouldBe("Al-Rashid Steel");
         steel.Splits.ShouldBe(
         [
-            new PayeeSplit(SiteExpenseCategory.Contractor, Finishing, 900),
-            new PayeeSplit(SiteExpenseCategory.Materials, Concrete, 650),
-            new PayeeSplit(SiteExpenseCategory.Materials, null, 30),
+            new PayeeSplit("contractor", Finishing, 900),
+            new PayeeSplit("materials", Concrete, 650),
+            new PayeeSplit("materials", null, 30),
         ]);
-        figures.ByPayee[1].Splits.ShouldBe([new PayeeSplit(SiteExpenseCategory.Fees, null, 100)]);
+        figures.ByPayee[1].Splits.ShouldBe([new PayeeSplit("fees", null, 100)]);
         figures.ByPayee.ShouldAllBe(p => p.Splits.Sum(s => s.Spent) == p.Spent);
     }
 }

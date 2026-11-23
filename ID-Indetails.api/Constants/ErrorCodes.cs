@@ -109,6 +109,15 @@ public static class ErrorCodes
     /// <summary>400. Only a closed month can be reopened for logging.</summary>
     public const string MonthNotClosed = "month_not_closed";
 
+    /// <summary>422. An expense category some expense or budget line uses can't be removed.</summary>
+    public const string ExpenseCategoryInUse = "expense_category_in_use";
+
+    /// <summary>422. "Other" can be renamed but never removed.</summary>
+    public const string ExpenseCategoryProtected = "expense_category_protected";
+
+    /// <summary>400. A business's categories have different names.</summary>
+    public const string ExpenseCategoryNameTaken = "expense_category_name_taken";
+
     /// <summary>400. A reopened month stays open until today or a later day.</summary>
     public const string ReopenUntilInPast = "reopen_until_in_past";
 

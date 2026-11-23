@@ -13,7 +13,7 @@ public sealed record SiteExpenseListQuery
 
     public long? AddedById { get; init; }
 
-    public SiteExpenseCategory? Category { get; init; }
+    public string? Category { get; init; }
 
     public long? AccountLabelId { get; init; }
 
@@ -57,8 +57,8 @@ public record SiteExpenseEntryRequest
     /// <summary>The day the money was spent. Left out: today (company time zone) when adding, as it is when changing.</summary>
     public DateOnly? SpentOn { get; init; }
 
-    /// <summary>Left out: <c>materials</c> when adding, as it is when changing.</summary>
-    public SiteExpenseCategory? Category { get; init; }
+    /// <summary>One of Execution's expense categories (<c>GET /api/expense-categories?domain=execution</c>). Left out: <c>materials</c> (or <c>other</c> without it) when adding, as it is when changing.</summary>
+    public string? Category { get; init; }
 
     /// <summary>An account label to file it under. It must not be archived unless the expense already has it; left out when changing, it clears the label.</summary>
     public long? AccountLabelId { get; init; }

@@ -248,6 +248,10 @@ public static class ProtonCoverage
         Action("HourExcuses.Add", "propose_hour_excuse", T2, ProtonFamily.PayRules),
         Action("HourExcuses.Delete", "propose_hour_excuse", T2, ProtonFamily.PayRules),
         Open("ReopenedMonths.Reopen", "a super admin reopens a closed month for logging on Company › Settings; Proton doesn't do it yet"),
+        Open("ExpenseCategories.Add", "a business's expense categories are kept on Settings › Finance; Proton doesn't change them yet"),
+        Open("ExpenseCategories.Rename", "a business's expense categories are kept on Settings › Finance; Proton doesn't change them yet"),
+        Open("ExpenseCategories.Order", "a business's expense categories are kept on Settings › Finance; Proton doesn't change them yet"),
+        Open("ExpenseCategories.Remove", "a business's expense categories are kept on Settings › Finance; Proton doesn't change them yet"),
         Open("ReopenedMonths.End", "a super admin locks a reopened month again on Company › Settings; Proton doesn't do it yet"),
 
         // Time off: not in Proton yet (the user's decision, 9 Nov 2026); the pages are in the app

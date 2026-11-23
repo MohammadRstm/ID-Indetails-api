@@ -208,17 +208,17 @@ public class AccountFiguresTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // site expenses only, largest first, those with a rate
         figures.ByCategory.Select(c => (c.Category, c.SpentUsd)).ShouldBe(
-            [(SiteExpenseCategory.Materials, 26_600m), (SiteExpenseCategory.Contractor, 8_000m), (SiteExpenseCategory.Fees, 1_500m)]);
+            [("materials", 26_600m), ("contractor", 8_000m), ("fees", 1_500m)]);
         figures.ByPayee.Select(p => (p.Payee, p.SpentUsd)).ShouldBe(
             [("Beirut Concrete", 20_500m), ("Al Nour", 8_000m), ("Tile House", 6_100m), ((string?)null, 1_500m)]);
         figures.ByCategory.Sum(c => c.SpentUsd).ShouldBe(figures.Costs.SiteExpensesUsd);
         // what each payee was paid by category and label, largest first; the unrated expense is left out
         figures.ByPayee.Select(p => p.Splits.Select(s => (s.Category, s.AccountLabelId, s.SpentUsd)).ToList()).ShouldBe(
         [
-            [(SiteExpenseCategory.Materials, (long?)concrete.Id, 20_000m), (SiteExpenseCategory.Materials, (long?)null, 500m)],
-            [(SiteExpenseCategory.Contractor, (long?)concrete.Id, 8_000m)],
-            [(SiteExpenseCategory.Materials, (long?)finishing.Id, 6_100m)],
-            [(SiteExpenseCategory.Fees, (long?)null, 1_500m)],
+            [("materials", (long?)concrete.Id, 20_000m), ("materials", (long?)null, 500m)],
+            [("contractor", (long?)concrete.Id, 8_000m)],
+            [("materials", (long?)finishing.Id, 6_100m)],
+            [("fees", (long?)null, 1_500m)],
         ]);
         figures.ByPayee.ShouldAllBe(p => p.Splits.Sum(s => s.SpentUsd) == p.SpentUsd);
 

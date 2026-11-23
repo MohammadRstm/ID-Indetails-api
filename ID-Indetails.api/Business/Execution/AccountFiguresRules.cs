@@ -25,7 +25,7 @@ public static class AccountFiguresRules
 
     /// <param name="Payee">The supplier as typed; null or blank for none.</param>
     /// <param name="Usd">Its cost in USD at the rate of the day it was spent; null when there was no rate that day.</param>
-    public sealed record ExpenseRow(long? LabelId, SiteExpenseCategory Category, string? Payee, decimal? Usd);
+    public sealed record ExpenseRow(long? LabelId, string Category, string? Payee, decimal? Usd);
 
     /// <param name="ClientTotal">What the client pays in all: work, supervision and TVA.</param>
     /// <param name="SupervisionDue">The work price times the supervision rate.</param>
@@ -41,7 +41,8 @@ public static class AccountFiguresRules
         decimal FromPocket,
         IReadOnlyList<long> LabelOrder,
         IReadOnlyList<PaymentRow> Payments,
-        IReadOnlyList<ExpenseRow> Expenses);
+        IReadOnlyList<ExpenseRow> Expenses,
+        IReadOnlyList<string>? CategoryOrder = null);
 
     /// <param name="Other">Supervision taken plus what was moved to the pocket money, less what it paid back; only on the unlabelled row.</param>
     public sealed record LabelRow(long? LabelId, decimal Received, decimal Spent, decimal Other)
@@ -49,12 +50,12 @@ public static class AccountFiguresRules
         public decimal Rest => Received - Spent - Other;
     }
 
-    public sealed record CategoryRow(SiteExpenseCategory Category, decimal Spent);
+    public sealed record CategoryRow(string Category, decimal Spent);
 
     /// <param name="Splits">What was spent with the payee by category and label, so a list of payees can be filtered by either.</param>
     public sealed record PayeeRow(string? Payee, decimal Spent, IReadOnlyList<PayeeSplit> Splits);
 
-    public sealed record PayeeSplit(SiteExpenseCategory Category, long? LabelId, decimal Spent);
+    public sealed record PayeeSplit(string Category, long? LabelId, decimal Spent);
 
     /// <param name="RestToPay">The client's total less what was received; below zero when they paid ahead.</param>
     /// <param name="SupervisionLeft">Supervision due less what was taken; below zero when more was taken.</param>
@@ -73,6 +74,8 @@ public static class AccountFiguresRules
         var received = input.Payments.Sum(p => p.AmountUsd);
         var cashInAccount = received - input.Costs.Total - input.SupervisionTaken - input.ToPocket + input.FromPocket;
         var priced = input.Expenses.Where(e => e.Usd is not null).ToList();
+        // equal spends follow the categories' own order (Settings), then any no longer listed by code
+        var rank = (input.CategoryOrder ?? []).Select((code, index) => (code, index)).ToDictionary(x => x.code, x => x.index);
 
         return new Figures(
             received,
@@ -82,7 +85,7 @@ public static class AccountFiguresRules
             Labels(input, received, priced),
             priced.GroupBy(e => e.Category)
                 .Select(g => new CategoryRow(g.Key, g.Sum(e => e.Usd!.Value)))
-                .OrderByDescending(c => c.Spent).ThenBy(c => c.Category)
+                .OrderByDescending(c => c.Spent).ThenBy(c => rank.GetValueOrDefault(c.Category, int.MaxValue)).ThenBy(c => c.Category, StringComparer.Ordinal)
                 .ToList(),
             priced.GroupBy(e => PayeeKey(e.Payee))
                 .Select(g => new PayeeRow(g.Key is null ? null : g.First().Payee!.Trim(), g.Sum(e => e.Usd!.Value),

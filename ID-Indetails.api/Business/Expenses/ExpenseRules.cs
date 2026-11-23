@@ -12,9 +12,8 @@ namespace ID_Indetails.api.Business.Expenses;
 /// </summary>
 public static class ExpenseRules
 {
-    public const string DefaultCategory = "other";
-
-    public static readonly IReadOnlyList<string> Categories = ["assets", "services", "contractor", "software", "travel", "hardware", "other"];
+    /// <summary>A new expense's category when none is given: every business keeps "other" (see <see cref="ExpenseCategoryRules"/>).</summary>
+    public const string DefaultCategory = ExpenseCategoryRules.Other;
 
     public sealed record CurrencyTotal(string Currency, decimal Total);
 

@@ -13,20 +13,22 @@ public class BudgetRulesTests
     private static readonly DateOnly Today = new(2026, 11, 11);
     private static readonly long[] Departments = [1, 2];
 
-    private static RuleDenial? Check(string domain, params Line[] lines) => BudgetRules.Check(domain, lines, Departments, Today, Today);
+    private static readonly IReadOnlyList<string> Site = ["materials", "contractor", "equipment", "fees", "other"];
+
+    private static RuleDenial? Check(string domain, params Line[] lines) => BudgetRules.Check(domain, lines, Departments, Today, Today, Site);
 
     [Fact]
     public void Each_business_has_its_own_categories()
     {
-        BudgetRules.CategoriesOf(DomainCodes.Design).ShouldBe(["expenses"]);
-        BudgetRules.CategoriesOf(DomainCodes.Execution).ShouldBe(["materials", "contractor", "equipment", "fees", "other", "ground_labour"]);
-        BudgetRules.AllCategories.Count.ShouldBe(7);
-        // every site expense category has a line of its own
-        Enum.GetValues<SiteExpenseCategory>().Select(BudgetRules.CategoryOf)
-            .ShouldBe(BudgetRules.CategoriesOf(DomainCodes.Execution).Except([BudgetRules.GroundLabour]));
+        BudgetRules.CategoriesOf(DomainCodes.Design, Site).ShouldBe(["expenses"]);
+        // every one of Execution's expense categories has a line of its own, a new one too
+        BudgetRules.CategoriesOf(DomainCodes.Execution, Site).ShouldBe(["materials", "contractor", "equipment", "fees", "other", "ground_labour"]);
+        BudgetRules.CategoriesOf(DomainCodes.Execution, [.. Site, "scaffolding"]).ShouldContain("scaffolding");
         BudgetRules.NameOf("ground_labour").ShouldBe("Ground labour");
         BudgetRules.NameOf("expenses").ShouldBe("Expenses");
         BudgetRules.NameOf("materials").ShouldBe("Materials");
+        BudgetRules.NameOf("site_visits").ShouldBe("Site visits");
+        BudgetRules.NameOf("materials", new Dictionary<string, string> { ["materials"] = "Building materials" }).ShouldBe("Building materials");
     }
 
     [Fact]
@@ -67,10 +69,10 @@ public class BudgetRulesTests
     [Fact]
     public void A_budget_starts_today_or_earlier_never_later()
     {
-        BudgetRules.Check(DomainCodes.Design, [new Line(1, null, 1)], Departments, Today, Today).ShouldBeNull();
-        BudgetRules.Check(DomainCodes.Design, [new Line(1, null, 1)], Departments, Today.AddYears(-1), Today).ShouldBeNull();
+        BudgetRules.Check(DomainCodes.Design, [new Line(1, null, 1)], Departments, Today, Today, Site).ShouldBeNull();
+        BudgetRules.Check(DomainCodes.Design, [new Line(1, null, 1)], Departments, Today.AddYears(-1), Today, Site).ShouldBeNull();
 
-        var tomorrow = BudgetRules.Check(DomainCodes.Design, [new Line(1, null, 1)], Departments, Today.AddDays(1), Today)!;
+        var tomorrow = BudgetRules.Check(DomainCodes.Design, [new Line(1, null, 1)], Departments, Today.AddDays(1), Today, Site)!;
         tomorrow.Field.ShouldBe("effectiveFrom");
         tomorrow.Code.ShouldBe(ErrorCodes.ValidationFailed);
     }

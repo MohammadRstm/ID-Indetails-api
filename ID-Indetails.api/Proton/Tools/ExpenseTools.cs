@@ -62,7 +62,8 @@ public sealed record SiteExpensesInput
     [Description("Last day, with spent_in custom.")]
     public DateOnly? To { get; init; }
 
-    public SiteExpenseCategory? Category { get; init; }
+    [Description("One of Execution's expense categories' codes, e.g. materials.")]
+    public string? Category { get; init; }
 
     [Description("Words in the item, who was paid, the note or the unit.")]
     public string? Search { get; init; }
@@ -83,7 +84,7 @@ public sealed record SiteExpenseRow(
     decimal Cost,
     string Currency,
     string? Supplier,
-    SiteExpenseCategory Category,
+    string Category,
     DateOnly SpentOn,
     string? AccountLabel,
     string AddedBy,

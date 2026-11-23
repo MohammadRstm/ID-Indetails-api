@@ -18,6 +18,7 @@ using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Finance.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
+using ID_Indetails.api.Repositories.Expenses.Abstraction;
 
 namespace ID_Indetails.api.Services.Projects.Implementation;
 
@@ -36,6 +37,7 @@ public sealed class ProjectBudgetService(
     IProjectFinanceRepository financeSources,
     IAccountFiguresRepository siteExpenses,
     IActivityEventRepository activity,
+    IExpenseCategoryRepository expenseCategories,
     IUnitOfWork unitOfWork,
     IClock clock) : IProjectBudgetService
 {
@@ -80,7 +82,8 @@ public sealed class ProjectBudgetService(
                 ? (await departments.ListAsync([project.Id], cancellationToken)).Select(d => d.TeamId).ToList()
                 : [];
             var effectiveFrom = request.EffectiveFrom ?? clock.CompanyToday;
-            BudgetRules.Check(project.DomainCode, lines, onProject, effectiveFrom, clock.CompanyToday).ThrowIfDenied();
+            BudgetRules.Check(project.DomainCode, lines, onProject, effectiveFrom, clock.CompanyToday, await SiteCategoriesAsync(project, cancellationToken))
+                .ThrowIfDenied();
 
             var latest = (await budgets.ListAsync(project.Id, cancellationToken)).FirstOrDefault();
             var budget = new ProjectBudget
@@ -127,12 +130,16 @@ public sealed class ProjectBudgetService(
         var figures = BudgetRules.Compare(
             lines.Select(l => new BudgetRules.Line(l.TeamId, l.Category, l.AmountUsd)).ToList(),
             await CostsAsync(project, money.Costs, cancellationToken));
-        var order = BudgetRules.CategoriesOf(project.DomainCode);
+        var siteCategories = project.DomainCode == DomainCodes.Execution
+            ? await expenseCategories.ListAsync(DomainCodes.Execution, cancellationToken)
+            : [];
+        var names = siteCategories.ToDictionary(c => c.Code, c => c.Name);
+        var order = BudgetRules.CategoriesOf(project.DomainCode, siteCategories.Select(c => c.Code).ToList());
         var rows = lines
             .Zip(figures.Lines, (line, f) => new ProjectBudgetLineResponse(
                 f.TeamId,
                 f.Category,
-                line.TeamName ?? (f.Category is { } category ? BudgetRules.NameOf(category) : "Department"),
+                line.TeamName ?? (f.Category is { } category ? BudgetRules.NameOf(category, names) : "Department"),
                 f.Amount,
                 f.Cost,
                 f.Left))
@@ -182,10 +189,15 @@ public sealed class ProjectBudgetService(
             .Select(e => (e.Category, Usd: rates.ToUsd(e.Total, e.Currency, e.SpentOn)))
             .Where(e => e.Usd is not null)
             .GroupBy(e => e.Category)
-            .Select(g => new BudgetRules.Cost(null, BudgetRules.CategoryOf(g.Key), g.Sum(e => e.Usd!.Value))));
+            .Select(g => new BudgetRules.Cost(null, g.Key, g.Sum(e => e.Usd!.Value))));
         result.Add(new BudgetRules.Cost(null, null, costs.Labour));
         return result;
     }
+
+    private async Task<IReadOnlyList<string>> SiteCategoriesAsync(Project project, CancellationToken cancellationToken)
+        => project.DomainCode == DomainCodes.Execution
+            ? (await expenseCategories.ListAsync(DomainCodes.Execution, cancellationToken)).Select(c => c.Code).ToList()
+            : [];
 
     private static ProjectBudgetVersionResponse VersionOf(ProjectBudgetRow row)
         => new(row.Version, row.EffectiveFrom, row.Reason, row.SetByName, row.SetAt, row.Lines.Sum(l => l.AmountUsd));

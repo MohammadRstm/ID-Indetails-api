@@ -27,6 +27,7 @@ using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
 using ID_Indetails.api.Services.SiteExpenses.Abstraction;
+using ID_Indetails.api.Repositories.Expenses.Abstraction;
 
 namespace ID_Indetails.api.Services.SiteExpenses.Implementation;
 
@@ -41,6 +42,7 @@ public sealed class SiteExpenseService(
     INotificationSender notifications,
     IUnitOfWork unitOfWork,
     IProfitFloor floor,
+    IExpenseCategoryRepository expenseCategories,
     IClock clock) : ISiteExpenseService
 {
     private const string ProjectNotFound = "Project not found.";
@@ -108,6 +110,14 @@ public sealed class SiteExpenseService(
         {
             Throw(SiteRules.CheckOpen(project.DomainCode, project.Status, project.RevenueLockedAt is not null));
             await CheckLabelsAsync(fresh.Select(x => (x.Item.AccountLabelId, $"items[{x.Index}].accountLabelId", (long?)null)), cancellationToken);
+            var categories = await SiteCategoriesAsync(cancellationToken);
+            foreach (var (item, index) in fresh)
+            {
+                Throw(ExpenseCategoryRules.CheckKnown(item.Category, categories, $"items[{index}].category"));
+            }
+
+            // without one, a new expense is materials while Execution has it, otherwise the fallback every business keeps
+            var fallback = categories.Contains(ExpenseCategoryRules.Materials) ? ExpenseCategoryRules.Materials : ExpenseCategoryRules.Other;
             var before = await floor.BeforeAsync(project, cancellationToken);
             foreach (var (item, _) in fresh)
             {
@@ -120,6 +130,7 @@ public sealed class SiteExpenseService(
                     AddedAt = clock.UtcNow,
                     AddedById = actor.UserId,
                     ClientRef = item.ClientRef,
+                    Category = fallback,
                 };
                 Apply(expense, item, entry);
                 siteExpenses.Add(expense);
@@ -161,6 +172,7 @@ public sealed class SiteExpenseService(
         var project = await OpenProjectAsync(actor, projectId, cancellationToken);
         var expense = await ChangeableExpenseAsync(actor, projectId, expenseId, cancellationToken);
         await CheckLabelsAsync([(request.AccountLabelId, "accountLabelId", expense.AccountLabelId)], cancellationToken);
+        Throw(ExpenseCategoryRules.CheckKnown(request.Category, await SiteCategoriesAsync(cancellationToken), "category"));
 
         var entry = SiteExpenseRules.Normalise(new SiteExpenseRules.Entry(request.Quantity, request.UnitCost, request.Amount));
         var before = await floor.BeforeAsync(project, cancellationToken);
@@ -192,6 +204,10 @@ public sealed class SiteExpenseService(
 
     private Task<UserAccess> ActorAsync(CancellationToken cancellationToken)
         => permissions.GetAccessAsync(currentUser.Id, cancellationToken);
+
+    /// <summary>Execution's expense categories (Settings), which a site expense's category is one of.</summary>
+    private async Task<IReadOnlyList<string>> SiteCategoriesAsync(CancellationToken cancellationToken)
+        => (await expenseCategories.ListAsync(DomainCodes.Execution, cancellationToken)).Select(c => c.Code).ToList();
 
     /// <summary>Locks the project row, so a change can't slip in while it is being finalised.</summary>
     private async Task<Project> OpenProjectAsync(UserAccess actor, long projectId, CancellationToken cancellationToken)

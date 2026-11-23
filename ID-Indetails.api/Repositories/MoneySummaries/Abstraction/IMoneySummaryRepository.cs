@@ -36,7 +36,7 @@ public sealed record SiteExpenseDetailRow(
     long Id,
     long ProjectId,
     string Name,
-    SiteExpenseCategory Category,
+    string Category,
     decimal? Quantity,
     string? Unit,
     decimal? UnitCost,

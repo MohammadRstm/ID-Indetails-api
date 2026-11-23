@@ -9,7 +9,7 @@ namespace ID_Indetails.api.Business.Projects;
 /// versions, each with its reason.
 /// <list type="bullet">
 /// <item>Design lines: a department of the project (its labour) or <see cref="Expenses"/>.</item>
-/// <item>Execution lines: a site expense category (materials, contractor, equipment, fees, other) or
+/// <item>Execution lines: one of Execution's expense categories (Settings, so a new one has a line too) or
 /// <see cref="GroundLabour"/>. Sites have no departments.</item>
 /// <item>A line's cost is the shared calculator's cost on what it holds, all time; left = amount − cost (below zero
 /// when over). Cost no line holds (labour in no department of the budget, a category with no line) is uncovered.</item>
@@ -26,12 +26,6 @@ public static class BudgetRules
     public const string GroundLabour = "ground_labour";
 
     private static readonly IReadOnlyList<string> DesignCategories = [Expenses];
-
-    private static readonly IReadOnlyList<string> ExecutionCategories =
-        [.. Enum.GetValues<SiteExpenseCategory>().Select(CategoryOf), GroundLabour];
-
-    /// <summary>Every category a line of either business can have.</summary>
-    public static IReadOnlyList<string> AllCategories { get; } = [.. DesignCategories, .. ExecutionCategories];
 
     /// <param name="TeamId">A Design department; null for a category line.</param>
     /// <param name="Category">One of <see cref="CategoriesOf"/>; null for a department line.</param>
@@ -50,25 +44,17 @@ public static class BudgetRules
     public sealed record Figures(IReadOnlyList<LineFigures> Lines, decimal Uncovered);
 
     /// <summary>The categories a budget line of the business can have, in the order they are shown.</summary>
-    public static IReadOnlyList<string> CategoriesOf(string domain)
-        => domain == DomainCodes.Execution ? ExecutionCategories : DesignCategories;
+    /// <param name="siteCategories">Execution's expense categories' codes, in their order.</param>
+    public static IReadOnlyList<string> CategoriesOf(string domain, IReadOnlyList<string> siteCategories)
+        => domain == DomainCodes.Execution ? [.. siteCategories, GroundLabour] : DesignCategories;
 
-    /// <summary>A site expense category as a budget line names it: its snake_case value.</summary>
-    public static string CategoryOf(SiteExpenseCategory category) => category switch
-    {
-        SiteExpenseCategory.Materials => "materials",
-        SiteExpenseCategory.Contractor => "contractor",
-        SiteExpenseCategory.Equipment => "equipment",
-        SiteExpenseCategory.Fees => "fees",
-        _ => "other",
-    };
-
-    /// <summary>A category line's name in words.</summary>
-    public static string NameOf(string category) => category switch
+    /// <summary>A category line's name in words: the expense category's own name where there is one.</summary>
+    public static string NameOf(string category, IReadOnlyDictionary<string, string>? names = null) => category switch
     {
         Expenses => "Expenses",
         GroundLabour => "Ground labour",
-        _ => char.ToUpperInvariant(category[0]) + category[1..],
+        _ when names is not null && names.TryGetValue(category, out var name) => name,
+        _ => char.ToUpperInvariant(category[0]) + category[1..].Replace('_', ' '),
     };
 
     /// <summary>
@@ -76,14 +62,21 @@ public static class BudgetRules
     /// business, no line twice, and a day that has come.
     /// </summary>
     /// <param name="departments">The project's departments (Design).</param>
-    public static RuleDenial? Check(string domain, IReadOnlyList<Line> lines, IReadOnlyCollection<long> departments, DateOnly effectiveFrom, DateOnly today)
+    /// <param name="siteCategories">Execution's expense categories' codes.</param>
+    public static RuleDenial? Check(
+        string domain,
+        IReadOnlyList<Line> lines,
+        IReadOnlyCollection<long> departments,
+        DateOnly effectiveFrom,
+        DateOnly today,
+        IReadOnlyList<string> siteCategories)
     {
         if (effectiveFrom > today)
         {
             return RuleDenial.Invalid(ErrorCodes.ValidationFailed, "effectiveFrom", "A budget can't start on a day still to come.");
         }
 
-        var categories = CategoriesOf(domain);
+        var categories = CategoriesOf(domain, siteCategories);
         for (var i = 0; i < lines.Count; i++)
         {
             var line = lines[i];

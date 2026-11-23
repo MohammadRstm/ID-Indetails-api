@@ -32,6 +32,7 @@ public sealed class ExpenseService(
     IActivityEventRepository activity,
     IUnitOfWork unitOfWork,
     IProfitFloor floor,
+    IExpenseCategoryRepository expenseCategories,
     IClock clock) : IExpenseService
 {
     public async Task<ExpenseListResponse> ListAsync(long projectId, CancellationToken cancellationToken = default)
@@ -55,6 +56,16 @@ public sealed class ExpenseService(
         if (ExpenseRules.CheckNotExecution(project.DomainCode) is { } denial)
         {
             throw denial.ToException();
+        }
+
+        // one of the business's expense categories (Settings)
+        if (ExpenseCategoryRules.HasCategories(project.DomainCode))
+        {
+            var codes = (await expenseCategories.ListAsync(project.DomainCode, cancellationToken)).Select(c => c.Code).ToList();
+            if (ExpenseCategoryRules.CheckKnown(request.Category, codes, "category") is { } unknown)
+            {
+                throw unknown.ToException();
+            }
         }
 
         var before = await floor.BeforeAsync(project, cancellationToken);

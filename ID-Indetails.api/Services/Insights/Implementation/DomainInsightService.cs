@@ -27,6 +27,7 @@ using ID_Indetails.api.Services.Insights.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
 using ID_Indetails.api.Validators.Insights;
 using Microsoft.Extensions.Options;
+using ID_Indetails.api.Repositories.Expenses.Abstraction;
 
 namespace ID_Indetails.api.Services.Insights.Implementation;
 
@@ -48,6 +49,7 @@ public sealed class DomainInsightService(
     ILabourRepository labour,
     IFinanceInsightService projectInsights,
     ITeamRepository teams,
+    IExpenseCategoryRepository expenseCategories,
     IClock clock,
     IOptions<ProtonOptions> options) : IDomainInsightService
 {
@@ -196,8 +198,10 @@ public sealed class DomainInsightService(
         var ids = projects.Select(p => p.Id).ToList();
         var rates = new ExchangeRateTable(await financeSources.ExchangeRatesAsync(cancellationToken));
         var (expenses, categories) = domain == DomainCodes.Design
-            ? DesignExpenses(await summaries.ExpensesAsync(ids, DateOnly.MinValue, today, cancellationToken), rates)
-            : SiteExpenses(await summaries.SiteExpensesAsync(ids, DateOnly.MinValue, today, cancellationToken), rates);
+            ? DesignExpenses(await summaries.ExpensesAsync(ids, DateOnly.MinValue, today, cancellationToken), rates,
+                await CategoryCodesAsync(DomainCodes.Design, cancellationToken))
+            : SiteExpenses(await summaries.SiteExpensesAsync(ids, DateOnly.MinValue, today, cancellationToken), rates,
+                await CategoryCodesAsync(DomainCodes.Execution, cancellationToken));
 
         var months = ExpenseTrendRules.Months(expenses, categories, window, thresholds);
         var titles = projects.ToDictionary(p => p.Id, p => p.Title);
@@ -272,24 +276,26 @@ public sealed class DomainInsightService(
         return new ProjectRiskRules.Settlement(project.SettledOwedAs!.Value, taken, completedOn);
     }
 
+    private async Task<IReadOnlyList<string>> CategoryCodesAsync(string domain, CancellationToken cancellationToken)
+        => (await expenseCategories.ListAsync(domain, cancellationToken)).Select(c => c.Code).ToList();
+
+    /// <summary>The business's categories in their order, then any older code its expenses still have.</summary>
+    private static IReadOnlyList<string> Ordered(IReadOnlyList<string> listed, IEnumerable<string> used)
+        => [.. listed, .. used.Distinct().Where(c => !listed.Contains(c)).Order(StringComparer.Ordinal)];
+
     private static (IReadOnlyList<ExpenseTrendRules.Expense> Expenses, IReadOnlyList<string> Categories) DesignExpenses(
-        IReadOnlyList<ExpenseDetailRow> rows, ExchangeRateTable rates)
+        IReadOnlyList<ExpenseDetailRow> rows, ExchangeRateTable rates, IReadOnlyList<string> listed)
     {
         var expenses = rows
             .Select(r => new ExpenseTrendRules.Expense(
                 r.Id, r.ProjectId, r.Label, r.Category, r.Currency, r.Amount, rates.ToUsd(r.Amount, r.Currency, r.SpentOn), r.SpentOn, null, null))
             .ToList();
-        // the scheme's own order, then any older category the list no longer has
-        var categories = ExpenseRules.Categories
-            .Concat(expenses.Select(e => e.Category).Distinct().Where(c => !ExpenseRules.Categories.Contains(c)).Order(StringComparer.Ordinal))
-            .ToList();
-        return (expenses, categories);
+        return (expenses, Ordered(listed, expenses.Select(e => e.Category)));
     }
 
     private static (IReadOnlyList<ExpenseTrendRules.Expense> Expenses, IReadOnlyList<string> Categories) SiteExpenses(
-        IReadOnlyList<SiteExpenseDetailRow> rows, ExchangeRateTable rates)
+        IReadOnlyList<SiteExpenseDetailRow> rows, ExchangeRateTable rates, IReadOnlyList<string> listed)
     {
-        static string Code(SiteExpenseCategory category) => JsonNamingPolicy.SnakeCaseLower.ConvertName(category.ToString());
         var expenses = rows
             .Select(r =>
             {
@@ -297,10 +303,10 @@ public sealed class DomainInsightService(
                 // entered as a quantity × a unit cost: the unit cost in USD, from the converted cost so cents don't round it away
                 var unitCostUsd = r is { Quantity: > 0, UnitCost: > 0 } && usd is { } converted ? converted / r.Quantity.Value : (decimal?)null;
                 return new ExpenseTrendRules.Expense(
-                    r.Id, r.ProjectId, r.Name, Code(r.Category), r.Currency, r.Total, usd, r.SpentOn, unitCostUsd is null ? null : r.Unit, unitCostUsd);
+                    r.Id, r.ProjectId, r.Name, r.Category, r.Currency, r.Total, usd, r.SpentOn, unitCostUsd is null ? null : r.Unit, unitCostUsd);
             })
             .ToList();
-        return (expenses, Enum.GetValues<SiteExpenseCategory>().Select(Code).ToList());
+        return (expenses, Ordered(listed, expenses.Select(e => e.Category)));
     }
 
     private static InsightBasisResponse RiskBasis(string domain, ProjectRiskRules.Thresholds t, int noAgreedAmount)

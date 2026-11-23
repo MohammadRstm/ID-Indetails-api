@@ -234,6 +234,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IProjectDeletionRepository, ProjectDeletionRepository>();
         services.AddScoped<IRequirementRepository, RequirementRepository>();
         services.AddScoped<IExpenseRepository, ExpenseRepository>();
+        services.AddScoped<IExpenseCategoryRepository, ExpenseCategoryRepository>();
         services.AddScoped<IBillingSettingsRepository, BillingSettingsRepository>();
         services.AddScoped<IExchangeRateRepository, ExchangeRateRepository>();
         services.AddScoped<IInvoiceRepository, InvoiceRepository>();
@@ -339,6 +340,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IProjectDeletionService, ProjectDeletionService>();
         services.AddScoped<IRequirementService, RequirementService>();
         services.AddScoped<IExpenseService, ExpenseService>();
+        services.AddScoped<IExpenseCategoryService, ExpenseCategoryService>();
         services.AddScoped<IBillingSettingsService, BillingSettingsService>();
         services.AddHttpClient<IExchangeRateFeed, OpenExchangeRateFeed>((provider, client) =>
             client.Timeout = TimeSpan.FromSeconds(provider.GetRequiredService<IOptions<ExchangeRateFeedOptions>>().Value.TimeoutSeconds));

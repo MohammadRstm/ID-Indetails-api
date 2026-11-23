@@ -23,7 +23,6 @@ public class SiteExpenseConfiguration : IEntityTypeConfiguration<SiteExpense>
             t.HasCheckConstraint("ck_site_expenses_quantity_positive", "`quantity` IS NULL OR `quantity` > 0");
             t.HasCheckConstraint("ck_site_expenses_unit_cost_non_negative", "`unit_cost` IS NULL OR `unit_cost` >= 0");
             t.HasCheckConstraint("ck_site_expenses_amount_positive", "`amount` IS NULL OR `amount` > 0");
-            t.HasCheckConstraint("ck_site_expenses_category", SnakeCaseEnum.CheckSql<SiteExpenseCategory>("category"));
         });
 
         builder.HasKey(x => x.Id);
@@ -35,7 +34,8 @@ public class SiteExpenseConfiguration : IEntityTypeConfiguration<SiteExpense>
         builder.Property(x => x.Currency).IsCurrencyCode();
         builder.Property(x => x.Supplier).HasMaxLength(200);
         builder.Property(x => x.Note).HasMaxLength(500);
-        builder.Property(x => x.Category).HasDefaultValue(SiteExpenseCategory.Materials);
+        // one of the Execution expense categories (expense_categories), checked when an expense is saved
+        builder.Property(x => x.Category).IsRequired().HasMaxLength(20).HasDefaultValue(ExpenseCategoryRules.Materials);
 
         builder.Property(x => x.Total)
             .HasComputedColumnSql(

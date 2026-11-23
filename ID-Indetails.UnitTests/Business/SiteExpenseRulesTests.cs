@@ -63,12 +63,12 @@ public class SiteExpenseRulesTests
         validator.TestValidate(expense).ShouldNotHaveAnyValidationErrors();
         validator.TestValidate(expense with
         {
-            Currency = "lbp", SpentOn = new DateOnly(2026, 10, 1), Category = SiteExpenseCategory.Contractor, AccountLabelId = 2,
+            Currency = "lbp", SpentOn = new DateOnly(2026, 10, 1), Category = "contractor", AccountLabelId = 2,
         }).ShouldNotHaveAnyValidationErrors();
 
         validator.TestValidate(expense with { Currency = "EUR" }).ShouldHaveValidationErrorFor(x => x.Currency);
         validator.TestValidate(expense with { SpentOn = new DateOnly(1999, 12, 31) }).ShouldHaveValidationErrorFor(x => x.SpentOn);
-        validator.TestValidate(expense with { Category = (SiteExpenseCategory)99 }).ShouldHaveValidationErrorFor(x => x.Category);
+        validator.TestValidate(expense with { Category = new string('x', 21) }).ShouldHaveValidationErrorFor(x => x.Category);
         validator.TestValidate(expense with { AccountLabelId = 0 }).ShouldHaveValidationErrorFor(x => x.AccountLabelId);
     }
 }

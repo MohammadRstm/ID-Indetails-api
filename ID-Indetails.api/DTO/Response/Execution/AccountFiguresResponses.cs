@@ -32,14 +32,14 @@ public sealed record AccountLabelRowResponse(
     decimal OtherUsd,
     decimal RestUsd);
 
-public sealed record AccountCategoryRowResponse(SiteExpenseCategory Category, decimal SpentUsd);
+public sealed record AccountCategoryRowResponse(string Category, decimal SpentUsd);
 
 /// <param name="Payee">The supplier as it was last typed; null for expenses with none ("No payee").</param>
 /// <param name="Splits">What was spent with the payee by category and account label, largest first: the client filters the payees by them.</param>
 public sealed record AccountPayeeRowResponse(string? Payee, decimal SpentUsd, IReadOnlyList<AccountPayeeSplitResponse> Splits);
 
 /// <param name="AccountLabelId">Null for expenses filed under no label.</param>
-public sealed record AccountPayeeSplitResponse(SiteExpenseCategory Category, long? AccountLabelId, decimal SpentUsd);
+public sealed record AccountPayeeSplitResponse(string Category, long? AccountLabelId, decimal SpentUsd);
 
 /// <summary>
 /// An Execution site's account, in USD at the rate of each day: what the client pays and has paid, what was spent,

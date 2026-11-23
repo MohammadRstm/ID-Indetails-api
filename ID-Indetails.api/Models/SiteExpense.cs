@@ -44,7 +44,8 @@ public class SiteExpense
     /// <summary>The day the money was spent, in the company time zone. It dates the cost for exchange rates.</summary>
     public DateOnly SpentOn { get; set; }
 
-    public SiteExpenseCategory Category { get; set; } = SiteExpenseCategory.Materials;
+    /// <summary>One of the Execution expense categories' codes (<see cref="ExpenseCategory"/>).</summary>
+    public string Category { get; set; } = "materials";
 
     /// <summary>The company account label it is filed under; null when none. An archived label stays on what carries it.</summary>
     public long? AccountLabelId { get; set; }

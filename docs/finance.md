@@ -37,6 +37,23 @@ A domain's money as the dashboards, the Financials page, the projects list and t
 
 ## Rules
 
+### Expense categories
+
+Each business keeps its own list (23 Nov 2026, `Business/Expenses/ExpenseCategoryRules.cs`, table `expense_categories`): Design's for project expenses, Execution's for site expenses. The migration seeded the ones the code had (Design: assets, services, contractor, software, travel, hardware, other; Execution: materials, contractor, equipment, fees, other), so every expense already recorded keeps its category.
+
+| Method and path | Who | Purpose |
+|---|---|---|
+| `GET /api/expense-categories?domain=` | anyone who sees the business | The list in its order (`id`, `code`, `name`, `sortOrder`); `removable` only for `financial:write` holders |
+| `POST /api/expense-categories` | `financial:write` | `{ domain, name }`: the code is made from the name (lowercase, underscores, unique in the business) and never changes. `400 expense_category_name_taken` |
+| `PUT /api/expense-categories/{id}` | `financial:write` | `{ name }`: renames it; expenses keep the code |
+| `PUT /api/expense-categories/order` | `financial:write` | `{ domain, ids }`: every one of the business's categories, in the new order |
+| `DELETE /api/expense-categories/{id}` | `financial:write` | `422 expense_category_in_use` while a live expense or a site's budget line uses it (move them first); `422 expense_category_protected` for `other`, every business's fallback |
+
+- An expense's or a site budget line's category must be one of its business's codes (`400 validation_failed`). A site expense without one is `materials` while Execution has it, otherwise `other`; a project expense without one is `other`.
+- Site budgets have a line for each of Execution's categories, a new one too, plus ground labour; a line's name is the category's.
+- A business the caller can't see reads as `404`; Website has none (`400`).
+
+
 - **Revenue in a period** is the money received in it, net of TVA: the projects' live payments less each one's TVA share, each counted on the day it arrived (`PeriodMoney.Received`). The TVA itself is `tvaCollected` (see [billing.md](billing.md#tva)). It moves as soon as a payment is recorded, whatever a project's progress; completing a project changes nothing but stops its amounts changing. The company overview works the same way.
 - **Expected revenue in a period** (`expectedRevenue`, `Business/Finance/ExpectedRevenue.cs`) is what was agreed in it, kept apart from what was received:
   - a client project's payment (Design) or fee (Execution) counts on the day it was set, and a change counts its difference on the day it changed (from the `revenue_set`, `revenue_changed` and `project_fee_set` events);
@@ -215,8 +232,8 @@ Judgements and simulations on one project or a whole domain, kept apart from the
 
 - `months`: how many months, ending with this one: 1 to 24, 12 when left out. This month runs to today.
 - **What is counted:**
-  - Design: project expenses, by their category (assets, services, contractor, software, travel, hardware, other, then any older category the list no longer has).
-  - Execution: site expenses, by theirs (materials, contractor, equipment, fees, other), dated by the day they were spent.
+  - Design: project expenses, by their category (Design's own list, in its order, then any older code the list no longer has).
+  - Execution: site expenses, by theirs (Execution's own list, the same way), dated by the day they were spent.
   - Labour and ground labour aren't spending here.
 - **Every project of the domain, internal ones included:** their costs count in the domain's totals (Q5).
 - **Everything up to today is read,** so the months before the window count for an average and for an item's earlier purchases.
