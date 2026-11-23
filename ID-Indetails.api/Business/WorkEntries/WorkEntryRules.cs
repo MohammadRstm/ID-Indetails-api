@@ -12,7 +12,8 @@ namespace ID_Indetails.api.Business.WorkEntries;
 /// <item>An entry can be edited, deleted or restored within the edit window, counted from when it was logged,
 /// and only while its project still accepts work.</item>
 /// <item>Past months never change: work that starts before the current company month can't be logged, edited, moved,
-/// deleted or restored, by anyone. Excusing hours is how a closed month is corrected.</item>
+/// deleted or restored, by anyone. Excusing hours is how a closed month is corrected, unless a super admin reopens the
+/// month for logging until a day (<see cref="ReopenRules"/>, <see cref="OpenMonths"/>).</item>
 /// </list>
 /// </summary>
 public static class WorkEntryRules
@@ -94,16 +95,13 @@ public static class WorkEntryRules
         return today.Day == 1 ? month.AddMonths(-1) : month;
     }
 
-    /// <param name="openFromUtc">When the first day of <see cref="OpenFrom"/> began, in UTC.</param>
-    public static bool IsInOpenMonth(DateTime startUtc, DateTime openFromUtc) => startUtc >= openFromUtc;
-
     /// <summary>Checks each start time given: an entry's current start and, when it moves, its new one.</summary>
-    public static RuleDenial? CheckOpenMonth(DateTime openFromUtc, params DateTime[] startsUtc)
-        => startsUtc.All(start => IsInOpenMonth(start, openFromUtc))
+    public static RuleDenial? CheckOpenMonth(OpenMonths open, params DateTime[] startsUtc)
+        => startsUtc.All(open.IsOpen)
             ? null
             : RuleDenial.BusinessRule(
                 ErrorCodes.MonthClosed,
-                "That work is in a closed month. Past months never change: ask for the hours to be excused instead.");
+                "That work is in a closed month. Ask a super admin to reopen the month for logging, or to excuse the hours.");
 
     public static RuleDenial? CheckChangeable(DateTime createdAt, DateTime now, EditWindow window, ProjectStatus projectStatus, bool holdLogging)
     {

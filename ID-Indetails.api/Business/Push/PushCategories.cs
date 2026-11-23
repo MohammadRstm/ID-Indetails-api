@@ -24,6 +24,8 @@ public static class PushCategories
         [NotificationKinds.WorkEntryReleased] = NotificationCategory.Work,
         [NotificationKinds.WeeklySummary] = NotificationCategory.Work,
         [NotificationKinds.HoursExcused] = NotificationCategory.Work,
+        [NotificationKinds.HoursExcuseReduced] = NotificationCategory.Work,
+        [NotificationKinds.MonthReopened] = NotificationCategory.Work,
         [NotificationKinds.ScheduleChanged] = NotificationCategory.Work,
         [NotificationKinds.HoursMissed] = NotificationCategory.Work,
         [NotificationKinds.HoursMissedList] = NotificationCategory.Work,

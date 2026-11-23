@@ -43,6 +43,7 @@ public sealed class WorkInsightsService(
     IActivityFeedRepository activityFeed,
     IOvertimeService overtime,
     IPresence presence,
+    IOpenMonths openMonths,
     IClock clock) : IWorkInsightsService
 {
     public const int MinProjectWeeks = 4;
@@ -148,6 +149,7 @@ public sealed class WorkInsightsService(
         var matching = theirs.Where(e => Matches(e, query, words)).ToList();
         var minutes = matching.Sum(e => e.Minutes);
         var overtimeById = await overtime.OvertimeOfAsync(matching, cancellationToken);
+        var open = await openMonths.CurrentAsync(cancellationToken);
         return new ProjectContributorDetailResponse(
             projectId,
             new WorkEntryPersonResponse(userId, theirs[0].UserName),
@@ -157,7 +159,7 @@ public sealed class WorkInsightsService(
             SharePct(minutes, all.Sum(e => e.Minutes)),
             ToWeeks(WorkStats.Weekly(matching.Select(ToWorked), clock.CompanyToday, ContributorWeeks, calendar.FirstDayOfWeek)),
             matching.OrderByDescending(e => e.StartedAt).Take(ContributorEntries)
-                .Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, overtimeById)).ToList());
+                .Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, overtimeById, open)).ToList());
     }
 
     public async Task<ProjectTimelineResponse> TimelineAsync(long projectId, CancellationToken cancellationToken = default)

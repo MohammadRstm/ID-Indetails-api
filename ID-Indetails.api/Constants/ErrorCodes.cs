@@ -106,6 +106,12 @@ public static class ErrorCodes
     public const string EditWindowClosed = "edit_window_closed";
     public const string MonthClosed = "month_closed";
 
+    /// <summary>400. Only a closed month can be reopened for logging.</summary>
+    public const string MonthNotClosed = "month_not_closed";
+
+    /// <summary>400. A reopened month stays open until today or a later day.</summary>
+    public const string ReopenUntilInPast = "reopen_until_in_past";
+
     // Messaging
     public const string NoTeamChat = "no_team_chat";
     public const string TeamHasChat = "team_has_chat";

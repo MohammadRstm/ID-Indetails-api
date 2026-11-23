@@ -98,6 +98,15 @@ public static class NotificationKinds
     /// <summary>Hours were excused for you in the hours ledger (subject: the excuse).</summary>
     public const string HoursExcused = "hours_excused";
 
+    /// <summary>
+    /// Someone logged hours where an excuse you gave stood in for them (subject: the excuse). The excuse gave way, or,
+    /// for a whole-month excuse (<c>wholeMonth: true</c>), stays for you to decide. To whoever gave it.
+    /// </summary>
+    public const string HoursExcuseReduced = "hours_excuse_reduced";
+
+    /// <summary>A closed month is open for logging again until a day (<c>month</c>, <c>openUntil</c>). To Design employees.</summary>
+    public const string MonthReopened = "month_reopened";
+
     /// <summary>An author submitted an internal BOQ draft to a site (subject: the BOQ). To its pricing managers and owner.</summary>
     public const string BoqSubmitted = "boq_submitted";
 

@@ -86,6 +86,12 @@ public static class PushText
                     : $"Your hours waiting on {project} went through."),
             NotificationKinds.WeeklySummary => new("Your week", "Last week's summary is ready."),
             NotificationKinds.HoursExcused => new("Hours excused", "Some of your hours were excused."),
+            NotificationKinds.HoursExcuseReduced => Bool(payload, "wholeMonth") == true
+                ? new("Hours logged in an excused month", $"{actor} logged hours in a month you excused in full. The excuse stays: remove it if it no longer applies.")
+                : new("Excuse reduced", $"{actor} logged hours an excuse you gave stood in for, so the excuse gave way."),
+            NotificationKinds.MonthReopened => new("Month open for logging", Text(payload, "monthName") is { } name
+                ? $"You can log your hours for {name} until {Text(payload, "openUntilName") ?? "the day it closes"}."
+                : "A past month is open for logging again."),
             NotificationKinds.HoursMissed => new("Hours to log", Date(payload, "day") is { } day
                 ? $"You logged less than {Day(day)} asked for. You can still log it this month."
                 : "You logged less than a working day asked for. You can still log it this month."),

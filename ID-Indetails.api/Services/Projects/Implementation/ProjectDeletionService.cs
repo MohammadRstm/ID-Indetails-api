@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Projects;
+using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.Exceptions.Base;
@@ -83,7 +84,7 @@ public sealed class ProjectDeletionService(
 
     private async Task<IReadOnlyList<string>> BlockersAsync(Project project, CancellationToken cancellationToken)
         => ProjectDeletionRules.Blockers(
-            project.Status, await deletion.BlockingAsync(project.Id, WorkEntryMapper.OpenFromUtc(clock), cancellationToken));
+            project.Status, await deletion.BlockingAsync(project.Id, clock.CompanyDayStartUtc(WorkEntryRules.OpenFrom(clock.CompanyToday)), cancellationToken));
 
     private async Task<Project> VisibleAsync(long projectId, CancellationToken cancellationToken, bool forUpdate = false)
     {

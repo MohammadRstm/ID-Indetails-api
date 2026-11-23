@@ -33,6 +33,7 @@ public sealed class WorkEntryQueryService(
     IDomainSettingsService domainSettings,
     IProjectFinanceService projectFinance,
     IOvertimeService overtime,
+    IOpenMonths openMonths,
     IClock clock) : IWorkEntryQueryService
 {
     /// <summary>How far back deleted entries are listed; the edit window usually closes sooner.</summary>
@@ -68,7 +69,8 @@ public sealed class WorkEntryQueryService(
 
         var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);
         var deleted = await entries.DeletedViewsAsync(actor.UserId, clock.UtcNow - RestorableFor, MaxDeletedListed, cancellationToken);
-        return deleted.Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, new Dictionary<long, int>())).ToList();
+        var open = await openMonths.CurrentAsync(cancellationToken);
+        return deleted.Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, new Dictionary<long, int>(), open)).ToList();
     }
 
     public async Task<WorkEntryDetailResponse> GetAsync(long id, CancellationToken cancellationToken = default)
@@ -87,13 +89,14 @@ public sealed class WorkEntryQueryService(
             cancellationToken);
         var overtimeById = await overtime.OvertimeOfAsync([view, .. sameDay], cancellationToken);
 
+        var open = await openMonths.CurrentAsync(cancellationToken);
         return new WorkEntryDetailResponse(
-            WorkEntryMapper.ToResponse(view, actor.UserId, settings, clock, overtimeById),
+            WorkEntryMapper.ToResponse(view, actor.UserId, settings, clock, overtimeById, open),
             (await comments.ListAsync(id, cancellationToken))
                 .Select(c => new WorkEntryCommentResponse(
                     c.Id, new WorkEntryCommentAuthorResponse(c.AuthorId, c.AuthorName, c.AuthorRole), c.Body, c.SentToGroup, c.CreatedAt))
                 .ToList(),
-            sameDay.Where(e => e.Id != id).Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, overtimeById)).ToList());
+            sameDay.Where(e => e.Id != id).Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, overtimeById, open)).ToList());
     }
 
     public async Task<WorkEntryExport> ExportAsync(WorkEntryListQuery query, CancellationToken cancellationToken = default)
@@ -191,8 +194,9 @@ public sealed class WorkEntryQueryService(
         var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);
         var (items, total) = await entries.SearchAsync(search, cancellationToken);
         var overtimeById = await overtime.OvertimeOfAsync(items, cancellationToken);
+        var open = await openMonths.CurrentAsync(cancellationToken);
         return new PagedResponse<WorkEntryResponse>(
-            items.Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, overtimeById)).ToList(),
+            items.Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, overtimeById, open)).ToList(),
             search.Page,
             search.PageSize,
             total);
