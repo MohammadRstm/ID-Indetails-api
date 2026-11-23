@@ -242,7 +242,7 @@ public class AccountFiguresRulesTests
             Spent(100, category: "other"),
             Spent(100, category: "contractor"),
             Spent(100, category: "materials"),
-        ]));
+        ]) with { CategoryOrder = ["materials", "contractor", "other"] });
 
         figures.ByCategory.Select(c => c.Category).ShouldBe(
             ["materials", "contractor", "other"]);

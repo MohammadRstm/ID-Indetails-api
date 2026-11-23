@@ -42,7 +42,7 @@ public class ExpenseRulesTests
 
         validator.Validate(new CreateExpenseRequest { Label = "Licence", Amount = 120.25m, Currency = "usd", Category = "software" })
             .IsValid.ShouldBeTrue();
-        validator.Validate(new CreateExpenseRequest { Label = " ", Amount = 0, Currency = "EUR", Category = "food" })
+        validator.Validate(new CreateExpenseRequest { Label = " ", Amount = 0, Currency = "EUR", Category = new string('x', 41) })
             .Errors.Select(e => e.PropertyName).Distinct().ShouldBe(["Label", "Amount", "Currency", "Category"], ignoreOrder: true);
         validator.Validate(new CreateExpenseRequest { Label = "Taxi", Amount = 10.125m }).IsValid.ShouldBeFalse();
     }

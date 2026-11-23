@@ -494,7 +494,7 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
 
         // what was recorded is cost: the price the client pays is in the BOQs, which Proton doesn't write
         (await GetAsync<SiteExpenseListResponse>(superAdmin, $"/api/projects/{site.Id}/site-expenses")).Items.Select(e => e.Category)
-            .Order().ShouldBe(["materials", "contractor"]);
+            .Order().ShouldBe(["contractor", "materials"]);
         var money = (await GetAsync<ProjectResponse>(superAdmin, $"/api/projects/{site.Id}")).Money!;
         money.Cost.SiteExpenses.ShouldBe(200m);
         money.Cost.GroundLabour.ShouldBe(75m);

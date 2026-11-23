@@ -37,8 +37,8 @@ public class ProjectBudgetValidatorTests
         Errors(Request(new ProjectBudgetLineRequest(null, null, 10m))).ShouldBe(["Lines[0].TeamId"]);
         Errors(Request(new ProjectBudgetLineRequest(4, "expenses", 10m))).ShouldBe(["Lines[0].TeamId"]);
         Errors(Request(new ProjectBudgetLineRequest(0, null, 10m))).ShouldBe(["Lines[0].TeamId"]);
-        Errors(Request(new ProjectBudgetLineRequest(null, "plumbing", 10m))).ShouldBe(["Lines[0].Category"]);
-        Errors(Request(new ProjectBudgetLineRequest(null, "Materials", 10m))).ShouldBe(["Lines[0].Category"]);
+        // the business's own categories are checked when it is saved; here only the length
+        Errors(Request(new ProjectBudgetLineRequest(null, new string('x', 41), 10m))).ShouldBe(["Lines[0].Category"]);
         Errors(Request(new ProjectBudgetLineRequest(4, null, 10m), new ProjectBudgetLineRequest(4, null, 20m))).ShouldBe(["Lines"]);
         Errors(Request(new ProjectBudgetLineRequest(null, "fees", 10m), new ProjectBudgetLineRequest(null, "fees", 20m))).ShouldBe(["Lines"]);
     }
