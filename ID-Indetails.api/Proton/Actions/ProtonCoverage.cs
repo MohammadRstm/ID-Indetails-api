@@ -193,6 +193,7 @@ public static class ProtonCoverage
         Open("Projects.Delete", "it can't be undone and needs the project's name typed in the app: Proton opens the project"),
         Open("Files.Upload", "it needs a file from the person's own device, which Proton doesn't have: it opens the place to upload it"),
         Open("Files.UploadVoice", "it is a recording made on the person's own device, which Proton doesn't have: it opens the place to record it"),
+        Open("Files.UploadDocument", "it needs a document from the person's own device, which Proton doesn't have: it opens Log work to attach it"),
 
         // Project expenses (Design) and an Execution site's costs
         Action("Expenses.Create", "propose_add_expense", T2, ProtonFamily.Money),

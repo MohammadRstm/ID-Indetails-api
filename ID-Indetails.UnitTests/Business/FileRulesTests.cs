@@ -6,6 +6,34 @@ using Shouldly;
 
 namespace ID_Indetails.UnitTests.Business;
 
+public class DocumentRulesTests
+{
+    [Theory]
+    [InlineData("plan.PDF", "%PDF-1.4 rest", "application/pdf")]
+    [InlineData("boq.xlsx", "PK\u0003\u0004 rest of zip", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")]
+    [InlineData("notes.csv", "item,qty\r\ntile,40", "text/csv")]
+    public void A_document_is_what_its_extension_says_when_its_first_bytes_fit(string name, string start, string mime)
+    {
+        var header = System.Text.Encoding.Latin1.GetBytes(start).Take(FileRules.HeaderLength).ToArray();
+        var found = FileRules.DetectDocument(name, header)!;
+
+        found.Kind.ShouldBe(FileKind.Document);
+        found.MimeType.ShouldBe(mime);
+        FileRules.KindOf(mime).ShouldBe(FileKind.Document);
+    }
+
+    [Fact]
+    public void Anything_else_is_refused()
+    {
+        FileRules.DetectDocument("plan.pdf", "PK\u0003\u0004 zip"u8).ShouldBeNull();
+        FileRules.DetectDocument("tool.exe", "MZ\u0090\u0000"u8).ShouldBeNull();
+        FileRules.DetectDocument("page.html", "<html>"u8).ShouldBeNull();
+        FileRules.DetectDocument(null, "%PDF-1.4"u8).ShouldBeNull();
+        FileRules.CheckSize(FileKind.Document, FileRules.MaxDocumentBytes + 1).ShouldNotBeNull();
+        FileRules.KindOf("video/mp4").ShouldBe(FileKind.Video);
+    }
+}
+
 public class FileRulesTests
 {
     private static byte[] Header(params byte[] start) => [.. start, .. new byte[FileRules.HeaderLength]];

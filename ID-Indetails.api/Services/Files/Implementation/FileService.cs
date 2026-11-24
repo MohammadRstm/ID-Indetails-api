@@ -42,20 +42,25 @@ public sealed class FileService(
     private const string NotFound = "File not found.";
 
     public Task<FileResponse> UploadAsync(Stream content, string? fileName, long uploadLength, CancellationToken cancellationToken = default)
-        => StoreAsync(content, fileName, uploadLength, voiceNote: false, cancellationToken);
+        => StoreAsync(content, fileName, uploadLength, header => FileRules.Detect(header),
+            "Only photos (JPEG, PNG, WebP, HEIC) and videos (MP4, MOV, WebM) can be uploaded.", cancellationToken);
 
     public Task<FileResponse> UploadVoiceAsync(Stream content, string? fileName, long uploadLength, CancellationToken cancellationToken = default)
-        => StoreAsync(content, fileName, uploadLength, voiceNote: true, cancellationToken);
+        => StoreAsync(content, fileName, uploadLength, header => FileRules.DetectVoice(header),
+            "Voice notes can be WebM, Ogg or MP4 audio.", cancellationToken);
 
-    private async Task<FileResponse> StoreAsync(Stream content, string? fileName, long uploadLength, bool voiceNote, CancellationToken cancellationToken)
+    public Task<FileResponse> UploadDocumentAsync(Stream content, string? fileName, long uploadLength, CancellationToken cancellationToken = default)
+        => StoreAsync(content, fileName, uploadLength, header => FileRules.DetectDocument(fileName, header),
+            "Documents can be PDF, Word, Excel, PowerPoint or CSV files.", cancellationToken);
+
+    /// <param name="detect">What the file is, from its first bytes; null when this route doesn't take it.</param>
+    private async Task<FileResponse> StoreAsync(
+        Stream content, string? fileName, long uploadLength, Func<byte[], FileRules.Detected?> detect, string refused, CancellationToken cancellationToken)
     {
         var me = await ActiveAsync(cancellationToken);
         var header = new byte[FileRules.HeaderLength];
         var read = await content.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false, cancellationToken);
-        var detected = (voiceNote ? FileRules.DetectVoice(header.AsSpan(0, read)) : FileRules.Detect(header.AsSpan(0, read)))
-            ?? throw new BusinessRuleException(
-                ErrorCodes.FileTypeNotAllowed,
-                voiceNote ? "Voice notes can be WebM, Ogg or MP4 audio." : "Only photos (JPEG, PNG, WebP, HEIC) and videos (MP4, MOV, WebM) can be uploaded.");
+        var detected = detect(header[..read]) ?? throw new BusinessRuleException(ErrorCodes.FileTypeNotAllowed, refused);
         // the upload's length (the file and its small envelope) is checked before anything is stored
         FileRules.CheckDailyQuota(await files.BytesUploadedSinceAsync(me.UserId, clock.UtcNow.AddDays(-1), cancellationToken), uploadLength).ThrowIfDenied();
 
@@ -105,7 +110,7 @@ public sealed class FileService(
             : (await storage.SaveAsync(new MemoryStream(original), detected.Extension, cancellationToken), detected);
     }
 
-    /// <summary>A video or voice note, written to disk as it arrives; refused (and removed) when it turns out too big.</summary>
+    /// <summary>A video, voice note or document, written to disk as it arrives; refused (and removed) when it turns out too big.</summary>
     private async Task<(string Key, FileRules.Detected Stored)> SaveStreamedAsync(Stream video, FileRules.Detected detected, CancellationToken cancellationToken)
     {
         var key = await storage.SaveAsync(video, detected.Extension, cancellationToken);

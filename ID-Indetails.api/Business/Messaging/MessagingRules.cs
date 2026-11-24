@@ -50,6 +50,12 @@ public static class MessagingRules
             ? RuleDenial.BusinessRule(ErrorCodes.TooManyVoiceNotes, "A message can carry one voice note.")
             : null;
 
+    /// <summary>Documents are for work entries: a chat takes photos, videos and voice notes.</summary>
+    public static RuleDenial? CheckNoDocuments(IEnumerable<string> attachmentTypes)
+        => attachmentTypes.Any(type => FileRules.KindOf(type) == FileKind.Document)
+            ? RuleDenial.BusinessRule(ErrorCodes.FileTypeNotAllowed, "Chats take photos, videos and voice notes.")
+            : null;
+
     public static RuleDenial? CheckDelete(long senderId, long callerId, string kind)
     {
         if (senderId != callerId)

@@ -11,6 +11,8 @@ namespace ID_Indetails.api.Business.Files;
 /// <item>What a file is comes from its first bytes, never from its name or the type the browser claims.</item>
 /// <item>Voice notes (WebM, Ogg or MP4 audio, up to 10 MB) come in through their own route: WebM and MP4 audio look
 /// like video in their first bytes, so the caller says it is a voice note.</item>
+/// <item>Documents (PDF, Word, Excel, PowerPoint, CSV, up to 25 MB) come in through their own route too, for work
+/// entries: what they are comes from their extension, checked against their first bytes.</item>
 /// <item>The stored name is only for display: path parts and unusual characters are dropped.</item>
 /// </list>
 /// </summary>
@@ -19,6 +21,7 @@ public static class FileRules
     public const long MaxImageBytes = 10 * 1024 * 1024;
     public const long MaxVideoBytes = 100 * 1024 * 1024;
     public const long MaxAudioBytes = 10 * 1024 * 1024;
+    public const long MaxDocumentBytes = 25 * 1024 * 1024;
 
     /// <summary>What one person may upload in a day, so nobody can fill the disk the database shares.</summary>
     public const long DailyBytesPerPerson = 2L * 1024 * 1024 * 1024;
@@ -29,6 +32,26 @@ public static class FileRules
     public const int MaxNameLength = 100;
 
     public sealed record Detected(FileKind Kind, string MimeType, string Extension);
+
+    private static readonly byte[] Zip = [0x50, 0x4B, 0x03, 0x04];
+    private static readonly byte[] Ole = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+
+    /// <summary>The documents accepted, by extension: their type and how their first bytes look.</summary>
+    private static readonly Dictionary<string, (string MimeType, Func<byte[], bool> Matches)> Documents = new()
+    {
+        [".pdf"] = ("application/pdf", b => Ascii(b.AsSpan(0, Math.Min(5, b.Length))) == "%PDF-"),
+        [".docx"] = ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", b => b.AsSpan().StartsWith(Zip)),
+        [".xlsx"] = ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", b => b.AsSpan().StartsWith(Zip)),
+        [".pptx"] = ("application/vnd.openxmlformats-officedocument.presentationml.presentation", b => b.AsSpan().StartsWith(Zip)),
+        [".doc"] = ("application/msword", b => b.AsSpan().StartsWith(Ole)),
+        [".xls"] = ("application/vnd.ms-excel", b => b.AsSpan().StartsWith(Ole)),
+        [".ppt"] = ("application/vnd.ms-powerpoint", b => b.AsSpan().StartsWith(Ole)),
+        // plain text: no control characters but tabs and line breaks
+        [".csv"] = ("text/csv", b => b.Length > 0 && b.All(c => c >= 0x20 || c is 0x09 or 0x0A or 0x0D)),
+    };
+
+    /// <summary>The extensions a document may have, for the error message and the client's picker.</summary>
+    public static IReadOnlyCollection<string> DocumentExtensions => Documents.Keys;
 
     private static readonly string[] HeicBrands = ["heic", "heix", "hevc", "hevx", "mif1", "msf1"];
     private static readonly string[] Mp4Brands = ["isom", "iso2", "iso4", "iso5", "iso6", "mp41", "mp42", "avc1", "M4V ", "dash", "MSNV"];
@@ -105,11 +128,24 @@ public static class FileRules
             : null;
     }
 
+    /// <summary>
+    /// What a document really is: the type its extension stands for, when its first bytes (up to
+    /// <see cref="HeaderLength"/>) fit it; null for anything else.
+    /// </summary>
+    public static Detected? DetectDocument(string? fileName, ReadOnlySpan<byte> header)
+    {
+        var extension = Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant();
+        return Documents.TryGetValue(extension, out var type) && type.Matches(header.ToArray())
+            ? new(FileKind.Document, type.MimeType, extension)
+            : null;
+    }
+
     /// <summary>A stored file's kind, from the type found when it was uploaded.</summary>
     public static FileKind KindOf(string mimeType)
         => mimeType.StartsWith("image/", StringComparison.Ordinal) ? FileKind.Image
             : mimeType.StartsWith("audio/", StringComparison.Ordinal) ? FileKind.Audio
-            : FileKind.Video;
+            : mimeType.StartsWith("video/", StringComparison.Ordinal) ? FileKind.Video
+            : FileKind.Document;
 
     public static RuleDenial? CheckSize(FileKind kind, long sizeBytes)
     {
@@ -117,6 +153,7 @@ public static class FileRules
         {
             FileKind.Image => (MaxImageBytes, "Photos"),
             FileKind.Audio => (MaxAudioBytes, "Voice notes"),
+            FileKind.Document => (MaxDocumentBytes, "Documents"),
             _ => (MaxVideoBytes, "Videos"),
         };
         return sizeBytes > max ? RuleDenial.BusinessRule(ErrorCodes.FileTooLarge, $"{label} can be at most {max / 1024 / 1024} MB.") : null;
