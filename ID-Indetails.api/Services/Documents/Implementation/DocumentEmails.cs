@@ -204,15 +204,12 @@ public static class DocumentEmails
             + Totals([.. positionRows.Select(r => (r.Label, r.Value, r.Strong))])
             + SignOff("With thanks,", senderName, head.CompanyName);
 
-        var sums = string.Join("
-", paymentRows.Concat(positionRows).Select(r => $"{r.Label}: {r.Value}"));
+        var sums = string.Join("\n", paymentRows.Concat(positionRows).Select(r => $"{r.Label}: {r.Value}"));
         var text = $"""
             Hello {payment.Client.DisplayName},
 
             {intro}
-            {(note is null ? "" : $"
-{note}
-")}
+            {(note is null ? "" : $"\n{note}\n")}
             Receipt {number} for {payment.Project.Title}
             Received on {received}, by {ReceiptPdf.Method(payment.Method).ToLowerInvariant()}
             {sums}

@@ -57,11 +57,11 @@ public static class ReceiptPdf
 
         return
         [
-            new("Project total", PdfLayout.Money(position.ProjectTotal)),
+            new TotalRow("Project total", PdfLayout.Money(position.ProjectTotal)),
             paid,
             position.PaidAhead > 0
-                ? new("Paid ahead", PdfLayout.Money(position.PaidAhead), Strong: true)
-                : new("Still to pay", PdfLayout.Money(position.StillToPay), Strong: true),
+                ? new TotalRow("Paid ahead", PdfLayout.Money(position.PaidAhead), Strong: true)
+                : new TotalRow("Still to pay", PdfLayout.Money(position.StillToPay), Strong: true),
         ];
     }
 
