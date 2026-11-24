@@ -475,6 +475,7 @@ public sealed class MessagingService(
         }
 
         MessagingRules.CheckVoiceNotes(types).ThrowIfDenied();
+        MessagingRules.CheckNoDocuments(types).ThrowIfDenied();
 
         var message = new Message
         {
