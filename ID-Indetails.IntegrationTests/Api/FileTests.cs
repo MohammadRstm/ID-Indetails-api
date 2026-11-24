@@ -269,6 +269,41 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         (video.Kind, video.MimeType).ShouldBe((FileKind.Video, "video/webm"));
     }
 
+    private static readonly byte[] Pdf = Encoding.ASCII.GetBytes("%PDF-1.7\n% drawing schedule\n");
+    private static readonly byte[] Xlsx = [0x50, 0x4B, 0x03, 0x04, .. new byte[40]];
+
+    [Fact]
+    public async Task A_work_entry_takes_a_document_its_author_and_reviewers_open_but_a_chat_refuses_it()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, anna) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+
+        var pdf = await (await UploadAsync(Client, Pdf, "../Schedule rev B.pdf", anna.AccessToken, "/api/files/document")).ReadAsync<FileResponse>();
+        (pdf.Kind, pdf.MimeType, pdf.Name).ShouldBe((FileKind.Document, "application/pdf", "Schedule rev B.pdf"));
+        var sheet = await (await UploadAsync(Client, Xlsx, "quantities.xlsx", anna.AccessToken, "/api/files/document")).ReadAsync<FileResponse>();
+        (sheet.Kind, sheet.MimeType).ShouldBe((FileKind.Document, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+
+        // the extension must fit the bytes, and programs or pages are never documents
+        await (await UploadAsync(Client, Png, "plan.pdf", anna.AccessToken, "/api/files/document")).ShouldFailWithAsync(422, ErrorCodes.FileTypeNotAllowed);
+        await (await UploadAsync(Client, Pdf, "plan.exe", anna.AccessToken, "/api/files/document")).ShouldFailWithAsync(422, ErrorCodes.FileTypeNotAllowed);
+        // and the photo and video route still takes no documents
+        await (await UploadAsync(Client, Pdf, "plan.pdf", anna.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.FileTypeNotAllowed);
+
+        var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var start = WorkEntryTestSteps.HoursAgo(3);
+        var logged = await Client.PostJsonAsync("/api/work-entries",
+            new { projectId = project.Id, description = "Door schedule", startedAt = start, endedAt = start.AddHours(1), attachmentFileId = pdf.Id },
+            anna.AccessToken);
+        ((int)logged.StatusCode).ShouldBe(201, await logged.Content.ReadAsStringAsync());
+        (await logged.ReadAsync<WorkEntryResponse>()).Attachment!.Kind.ShouldBe(FileKind.Document);
+        var opened = await Client.GetAsync($"/api/files/{pdf.Id}", superAdmin.AccessToken);
+        opened.Content.Headers.ContentType!.MediaType.ShouldBe("application/pdf");
+        (await opened.Content.ReadAsByteArrayAsync()).ShouldBe(Pdf);
+
+        await (await Client.PostJsonAsync($"/api/messages/direct/{superAdmin.User.Id}", new { body = "", attachmentIds = new[] { sheet.Id } }, anna.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.FileTypeNotAllowed);
+    }
+
     [Fact]
     public async Task A_voice_note_over_10_MB_is_refused()
     {
