@@ -712,7 +712,7 @@ and confirmed strongly: a second step at least, and a typed phrase the server st
 | `propose_delete_team` | Deletes | `DELETE /api/teams/{id}` | the department's name typed; an empty department only (one whose chat has messages is refused by the app) |
 | `propose_company_settings` | CompanyRules | `PUT /api/company/settings` | two steps; the company's name typed for a new week start or default currency. The card says how many people it affects |
 | `propose_domain_settings` | CompanyRules | `PUT /api/domain-settings/{domain}` | two steps; the domain's name typed to let projects on hold take work (`holdLogging` on) or to stop it. The card says how many people it affects |
-| `propose_send_message` | Messaging | `POST /api/messages/direct/{id}`, `/teams/{id}` | see below |
+| `propose_send_message` | Messaging | `POST /api/messages/direct/{id}`, `/teams/{id}`, `/groups/{id}` | see below |
 | `propose_comment_work_entry` with `send_to_group` | Core, held to Messaging | `POST /api/work-entries/{id}/comments` | the team's name typed; needs Messaging switched on and a typed question |
 
 Reads for them: `get_company_settings` and `get_domain_settings` (both rule-based: everyone may read them). Each
@@ -761,13 +761,13 @@ person and search for now), and a one-off form fill.
 ## Messages sent as the user (Stage 5, Phase 7)
 
 `propose_send_message` (prompt: `Proton/Prompts/messages.md`) sends one message, as the user, to one person or one
-team chat, through the messaging service and its rules (reach, active recipient, membership, mentions):
+team chat or chat group, through the messaging service and its rules (reach, active recipient, membership, mentions):
 
 - **Only to someone the user named.** The recipient must be a contact or a team chat the user is in, and a word of
   their name must appear in what the user typed in this conversation. A name that only appeared in the data is
   refused. As a Messaging action it is also refused on a turn the user didn't type.
 - **Exactly what the card shows.** The body is stored with the proposal and sent byte for byte. No attachments, no
-  `@all`, at most 10 mentions, team chats only.
+  `@all`, at most 10 mentions, team chats and chat groups only.
 - **Strong.** Two steps for a direct message; the recipient's name typed for a team chat with mentions or more than ten
   people, and for any message with figures in it (an amount, a percentage, a large number), with a warning to check
   the recipient may see them.
@@ -776,6 +776,11 @@ team chat, through the messaging service and its rules (reach, active recipient,
 - **Marked.** The message carries the confirmed action (`messages.proton_action_id`) and reads `viaProton: true`; the
   chat shows it ([messaging.md](messaging.md)). A comment shared to a team chat is not marked yet: its card in the chat
   already shows who wrote it.
+- **Chat groups** (24 November 2026, [messaging.md](messaging.md#custom-groups)). Proton sends to a group the user is in
+  (`group_id`), marks it read, and lists the user's groups in `find_recipient` and `get_my_inbox`. Left out for now: a
+  group is no ref type, so Proton can't open a group's chat or draft into its composer (`fill_form` with `message` takes a
+  person or a department); it opens the messages page. Making, renaming, deleting, changing who is in a group or its
+  photo, and leaving it are `Open` entries: the person does them on the messages page.
 
 ## Everything else the user can do (2026-11)
 

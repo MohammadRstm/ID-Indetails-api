@@ -20,6 +20,9 @@ public sealed record ChatPerson(
 
 public sealed record ChatTeam(long Id, string Name, string Domain);
 
+/// <summary>A custom chat group, with everyone stored in it (active or not).</summary>
+public sealed record ChatGroup(long Id, string Name, long? PhotoFileId, IReadOnlyList<long> MemberIds, DateTime CreatedAt);
+
 public sealed record MessagePerson(long Id, string Name, long? PhotoFileId = null);
 
 public sealed record MessageView(
@@ -90,6 +93,30 @@ public interface IMessagingRepository
     void Add(Conversation conversation);
 
     void Add(Message message);
+
+    /// <summary>Every custom group, by name. Not tracked.</summary>
+    Task<IReadOnlyList<ChatGroup>> GroupsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The custom groups the user is in, by name. Not tracked.</summary>
+    Task<IReadOnlyList<ChatGroup>> GroupsOfAsync(long userId, CancellationToken cancellationToken = default);
+
+    /// <summary>A custom group by its conversation id. Not tracked.</summary>
+    Task<ChatGroup?> GroupAsync(long id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// For changing a custom group: locks its row until the transaction ends, so changes to one group happen one at a
+    /// time. Tracked, with its members.
+    /// </summary>
+    Task<Conversation?> GroupForUpdateAsync(long id, CancellationToken cancellationToken = default);
+
+    /// <summary>The files a custom group holds: its messages' attachments and its photo. Tracked, for deleting them.</summary>
+    Task<IReadOnlyList<StoredFile>> GroupFilesAsync(long conversationId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Removes a custom group with everything in it: its messages (their mentions and attachments go with them), read
+    /// markers, read times and members. Its files are the caller's to remove. Saved with the unit of work.
+    /// </summary>
+    Task RemoveGroupAsync(Conversation group, CancellationToken cancellationToken = default);
 
     /// <summary>The message with its attachments and their files, for deleting it. Tracked.</summary>
     Task<Message?> MessageForDeleteAsync(long id, CancellationToken cancellationToken = default);

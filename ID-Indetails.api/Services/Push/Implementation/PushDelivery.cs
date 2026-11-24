@@ -155,7 +155,14 @@ public sealed class PushDelivery(
                     teamName = _teams.SingleOrDefault(t => t.Id == teamId)?.Name;
                 }
 
-                if (message is null || (m.TeamId is not null && teamName is null))
+                if (m.GroupId is { } groupId)
+                {
+                    // someone taken out of the group before the push went hears nothing of it
+                    var group = await messaging.GroupAsync(groupId, cancellationToken);
+                    teamName = group is not null && group.MemberIds.Contains(m.RecipientId) ? group.Name : null;
+                }
+
+                if (message is null || ((m.TeamId is not null || m.GroupId is not null) && teamName is null))
                 {
                     return null;
                 }
@@ -169,7 +176,7 @@ public sealed class PushDelivery(
 
                 return new(
                     PushText.ForMessage(message.Sender.Name, teamName, message.Body, message.Kind, message.Attachments.Count > 0, m.Mentioned, IsVoiceOnly(message)),
-                    new PushData(m.RecipientId, PushKinds.Message, null, PushTarget.Chat(m.TeamId, message.Sender.Id)));
+                    new PushData(m.RecipientId, PushKinds.Message, null, PushTarget.Chat(m.TeamId, message.Sender.Id, m.GroupId)));
 
             case ReminderPushJob r:
                 var text = r.Kind == PushKinds.LogReminder ? PushText.LogReminder() : PushText.LabourWeekReminder(r.ProjectTitle);

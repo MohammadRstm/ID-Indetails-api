@@ -12,6 +12,7 @@ public sealed record SiteLogUse(long UserId, string DomainCode);
 /// <param name="IsWebsite">A picture or the favicon of the company's public website.</param>
 /// <param name="ProjectDomains">The domains of the projects whose photo it is.</param>
 /// <param name="SiteLogs">The daily logs it is the voice note of.</param>
+/// <param name="GroupPhotoIds">The custom chat groups whose photo it is.</param>
 public sealed record FileUses(
     bool IsPhoto,
     bool IsLogo,
@@ -19,9 +20,11 @@ public sealed record FileUses(
     IReadOnlyList<long> EntryIds,
     bool IsWebsite,
     IReadOnlyList<string> ProjectDomains,
-    IReadOnlyList<SiteLogUse> SiteLogs)
+    IReadOnlyList<SiteLogUse> SiteLogs,
+    IReadOnlyList<long> GroupPhotoIds)
 {
-    public bool IsUsed => IsPhoto || IsLogo || IsWebsite || ConversationIds.Count > 0 || EntryIds.Count > 0 || ProjectDomains.Count > 0 || SiteLogs.Count > 0;
+    public bool IsUsed => IsPhoto || IsLogo || IsWebsite || ConversationIds.Count > 0 || EntryIds.Count > 0 || ProjectDomains.Count > 0 || SiteLogs.Count > 0
+        || GroupPhotoIds.Count > 0;
 }
 
 public interface IFileRepository

@@ -19,3 +19,23 @@ public sealed record MessagePageQuery
 
     public int Limit { get; init; } = 50;
 }
+
+/// <summary>A new custom chat group. Whoever creates it is put in it too.</summary>
+public sealed record CreateChatGroupRequest
+{
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Active staff of any business; the creator may be left out, as they join anyway.</summary>
+    public IReadOnlyList<long> MemberIds { get; init; } = [];
+}
+
+public sealed record RenameChatGroupRequest
+{
+    public string Name { get; init; } = string.Empty;
+}
+
+public sealed record AddChatGroupMembersRequest
+{
+    /// <summary>Active staff of any business. Anyone already in the group is left as they are.</summary>
+    public IReadOnlyList<long> UserIds { get; init; } = [];
+}

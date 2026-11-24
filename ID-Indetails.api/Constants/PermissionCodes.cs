@@ -91,8 +91,9 @@ public static class PermissionCodes
     // Salary advances: anyone with pay asks, super admins give and decide
     public const string SalaryAdvanceManage = "salary_advance:manage";
 
-    // Messages: the Announcements chat everyone reads
+    // Messages: the Announcements chat everyone reads, and chat groups of whoever is picked
     public const string MessageAnnounce = "message:announce";
+    public const string MessageManageGroups = "message:manage_groups";
 
     // The company website (its public content)
     public const string WebsiteView = "website:view";

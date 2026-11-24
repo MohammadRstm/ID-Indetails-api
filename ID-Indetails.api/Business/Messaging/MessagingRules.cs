@@ -15,15 +15,38 @@ namespace ID_Indetails.api.Business.Messaging;
 /// other domain. Nobody messages themselves, and only active people receive messages.</item>
 /// <item>Mentions exist only in group chats, and only of the chat's members.</item>
 /// <item>A message carries at most one voice note (an audio file) among its attachments.</item>
-/// <item>Whoever sent a message can delete it, whatever it carries. A shared work-entry comment stays: it belongs to the comment.</item>
+/// <item>Whoever sent a message can delete it, whatever it carries. A shared work-entry comment stays: it belongs to the comment. So does a custom group's grey line, the record of what changed.</item>
+/// <item>Custom groups (decided 24 November 2026) have the members a holder of <c>message:manage_groups</c> picked:
+/// any active staff, from any business. Only members read and write in one, and someone taken out loses it, history
+/// included. Mentions there are of its members.</item>
 /// </list>
-/// Chats mirror the organisation, so they follow role and team rather than permissions.
+/// Team chats and direct chats mirror the organisation, so they follow role and team rather than permissions.
 /// </summary>
 public static class MessagingRules
 {
     public const int MaxBodyLength = 4000;
     public const int MaxMentions = 50;
     public const int MaxAttachments = 10;
+    public const int MaxGroupNameLength = 80;
+    public const int MaxGroupMembers = 200;
+
+    /// <summary>
+    /// Everyone to put in a group must be active staff: <paramref name="found"/> are the people of
+    /// <paramref name="userIds"/> that exist. Portal clients aren't staff, so they are never among them.
+    /// </summary>
+    public static RuleDenial? CheckGroupMembers(IReadOnlyCollection<long> userIds, IReadOnlyCollection<Person> found)
+    {
+        var active = found.Where(p => p.Status == UserStatus.Active).Select(p => p.Id).ToHashSet();
+        return userIds.All(active.Contains)
+            ? null
+            : RuleDenial.Invalid(ErrorCodes.ValidationFailed, "memberIds", "Only active staff can be in a group.");
+    }
+
+    /// <summary>A group holds at most <see cref="MaxGroupMembers"/> people.</summary>
+    public static RuleDenial? CheckGroupSize(int members)
+        => members <= MaxGroupMembers
+            ? null
+            : RuleDenial.Invalid(ErrorCodes.ValidationFailed, "memberIds", $"A group has at most {MaxGroupMembers} people.");
 
     public sealed record Person(long Id, string Role, string? Domain, long? TeamId, UserStatus Status);
 
@@ -63,9 +86,12 @@ public static class MessagingRules
             return RuleDenial.Forbidden(ErrorCodes.Forbidden, "Only the person who sent a message can delete it.");
         }
 
-        return kind == MessageKinds.Text
-            ? null
-            : RuleDenial.BusinessRule(ErrorCodes.MessageNotDeletable, "A shared work comment can't be deleted from the chat.");
+        return kind switch
+        {
+            MessageKinds.Text => null,
+            MessageKinds.GroupEvent => RuleDenial.BusinessRule(ErrorCodes.MessageNotDeletable, "A group's grey line can't be deleted: it says what changed in the group."),
+            _ => RuleDenial.BusinessRule(ErrorCodes.MessageNotDeletable, "A shared work comment can't be deleted from the chat."),
+        };
     }
 
     public static RuleDenial? CheckMentions(IReadOnlyCollection<long> mentionIds, IReadOnlySet<long>? memberIds)

@@ -17,16 +17,19 @@ using Microsoft.Extensions.Options;
 
 namespace ID_Indetails.api.Proton.Actions;
 
-/// <param name="PersonId">A direct chat; <paramref name="TeamId"/> a team chat; neither is Announcements.</param>
-public sealed record MarkChatReadArgs(long? PersonId, long? TeamId);
+/// <param name="PersonId">A direct chat; <paramref name="TeamId"/> a team chat; <paramref name="GroupId"/> a custom group; none is Announcements.</param>
+public sealed record MarkChatReadArgs(long? PersonId, long? TeamId, long? GroupId = null);
 
 public sealed record MarkChatReadInput : ProtonActionInput
 {
-    [Description("Someone the user has a direct chat with (from get_my_inbox or find_recipient). Give one of person_id, team_id or announcements.")]
+    [Description("Someone the user has a direct chat with (from get_my_inbox or find_recipient). Give one of person_id, team_id, group_id or announcements.")]
     public long? PersonId { get; init; }
 
     [Description("A department chat the user is in (from get_my_inbox or find_recipient).")]
     public long? TeamId { get; init; }
+
+    [Description("A chat group the user is in (from get_my_inbox or find_recipient).")]
+    public long? GroupId { get; init; }
 
     [Description("The Announcements chat.")]
     public bool Announcements { get; init; }
@@ -34,32 +37,33 @@ public sealed record MarkChatReadInput : ProtonActionInput
 
 /// <summary>
 /// Marks one of the user's own chats read up to its latest message, through POST /api/messages/direct/{id}/read,
-/// /teams/{id}/read or /announcements/read once confirmed. Only a chat in the user's inbox with something unread.
+/// /teams/{id}/read, /groups/{id}/read or /announcements/read once confirmed. Only a chat in the user's inbox with something unread.
 /// </summary>
 public sealed class ProposeMarkChatReadTool(IMessagingService messaging) : ProtonActionTool<MarkChatReadInput, MarkChatReadArgs>
 {
     public override string Name => "propose_mark_chat_read";
 
     public override string Description =>
-        "Propose marking one of the user's own chats as read: a direct chat, a department chat or Announcements (ids from " +
+        "Propose marking one of the user's own chats as read: a direct chat, a department chat, a chat group or Announcements (ids from " +
         "get_my_inbox). Nothing changes until the user confirms the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Low;
 
-    // MarkDirectRead, MarkTeamRead and MarkAnnouncementsRead: the messaging service decides which chats are the caller's, for all three.
+    // MarkDirectRead, MarkTeamRead, MarkGroupRead and MarkAnnouncementsRead: the messaging service decides which chats are the caller's, for all four.
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfRuleBasedWrite<MessagesController>(nameof(MessagesController.MarkDirectRead));
 
     protected override async Task<(MarkChatReadArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
         MarkChatReadInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
-        if ((input.PersonId is null ? 0 : 1) + (input.TeamId is null ? 0 : 1) + (input.Announcements ? 1 : 0) != 1)
+        if ((input.PersonId is null ? 0 : 1) + (input.TeamId is null ? 0 : 1) + (input.GroupId is null ? 0 : 1) + (input.Announcements ? 1 : 0) != 1)
         {
-            throw new ProtonToolInputException("Name one chat: person_id, team_id or announcements (get_my_inbox lists them).");
+            throw new ProtonToolInputException("Name one chat: person_id, team_id, group_id or announcements (get_my_inbox lists them).");
         }
 
         var chat = (await messaging.ConversationsAsync(cancellationToken)).FirstOrDefault(c => input.PersonId is { } person
                 ? c.Person?.Id == person
-                : input.TeamId is { } team ? c.Team?.Id == team : c.Type == ConversationType.Announcements)
+                : input.TeamId is { } team ? c.Team?.Id == team
+                : input.GroupId is { } group ? c.Group?.Id == group : c.Type == ConversationType.Announcements)
             ?? throw new ProtonToolInputException("That chat isn't in the user's inbox (a direct chat shows up once someone has written in it).");
         if (chat.Unread == 0)
         {
@@ -68,12 +72,13 @@ public sealed class ProposeMarkChatReadTool(IMessagingService messaging) : Proto
 
         var (name, target) = chat.Team is { } t ? ($"the {t.Name} department chat", new ProtonRef(ProtonRefType.Team, t.Id, t.Name, t.Domain))
             : chat.Person is { } p ? ($"the chat with {p.Name}", new ProtonRef(ProtonRefType.Person, p.Id, p.Name, p.Domain))
+            : chat.Group is { } g ? ($"the {g.Name} group", (ProtonRef?)null)
             : ("Announcements", (ProtonRef?)null);
         var preview = new ProtonPreview(
             $"Mark {name} as read",
             [new ProtonChange("Unread messages", chat.Unread.ToString(), "0")],
             chat.UnreadMention ? "This also clears the mention of you there. The messages stay as they are." : "The messages stay as they are.");
-        return (new MarkChatReadArgs(input.PersonId, input.TeamId), preview, target);
+        return (new MarkChatReadArgs(input.PersonId, input.TeamId, input.GroupId), preview, target);
     }
 
     protected override object? RequestOf(MarkChatReadArgs args) => null;
@@ -84,6 +89,10 @@ public sealed class ProposeMarkChatReadTool(IMessagingService messaging) : Proto
         {
             await messaging.MarkTeamReadAsync(teamId, cancellationToken);
         }
+        else if (args.GroupId is { } groupId)
+        {
+            await messaging.MarkGroupReadAsync(groupId, cancellationToken);
+        }
         else if (args.PersonId is { } personId)
         {
             await messaging.MarkDirectReadAsync(personId, cancellationToken);
@@ -93,7 +102,7 @@ public sealed class ProposeMarkChatReadTool(IMessagingService messaging) : Proto
             await messaging.MarkAnnouncementsReadAsync(cancellationToken);
         }
 
-        return new ProtonActionDone("Marked the chat as read.", "chat", args.TeamId ?? args.PersonId ?? 0, []);
+        return new ProtonActionDone("Marked the chat as read.", "chat", args.TeamId ?? args.GroupId ?? args.PersonId ?? 0, []);
     }
 }
 

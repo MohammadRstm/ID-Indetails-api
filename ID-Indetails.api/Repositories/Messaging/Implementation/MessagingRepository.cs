@@ -1,4 +1,5 @@
 using ID_Indetails.api.Business.Common;
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.Data;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
@@ -62,6 +63,50 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
     public void Add(Conversation conversation) => db.Conversations.Add(conversation);
 
     public void Add(Message message) => db.Messages.Add(message);
+
+    public Task<IReadOnlyList<ChatGroup>> GroupsAsync(CancellationToken cancellationToken = default)
+        => Groups(db.Conversations.Where(c => c.Type == ConversationType.CustomGroup), cancellationToken);
+
+    public Task<IReadOnlyList<ChatGroup>> GroupsOfAsync(long userId, CancellationToken cancellationToken = default)
+        => Groups(db.Conversations.Where(c => c.Type == ConversationType.CustomGroup && c.Members.Any(m => m.UserId == userId)), cancellationToken);
+
+    public async Task<ChatGroup?> GroupAsync(long id, CancellationToken cancellationToken = default)
+        => (await Groups(db.Conversations.Where(c => c.Id == id && c.Type == ConversationType.CustomGroup), cancellationToken)).SingleOrDefault();
+
+    public async Task<Conversation?> GroupForUpdateAsync(long id, CancellationToken cancellationToken = default)
+    {
+        var group = (await db.Conversations
+                .FromSql($"SELECT * FROM `conversations` WHERE `id` = {id} AND `type` = 'custom_group' FOR UPDATE")
+                .ToListAsync(cancellationToken))
+            .SingleOrDefault();
+        if (group is not null)
+        {
+            await db.Entry(group).Collection(g => g.Members).LoadAsync(cancellationToken);
+        }
+
+        return group;
+    }
+
+    public async Task<IReadOnlyList<StoredFile>> GroupFilesAsync(long conversationId, CancellationToken cancellationToken = default)
+    {
+        var attached = await db.MessageAttachments
+            .Where(a => a.Message.ConversationId == conversationId)
+            .Select(a => a.File)
+            .ToListAsync(cancellationToken);
+        var photo = await db.Files
+            .Where(f => db.Conversations.Any(c => c.Id == conversationId && c.PhotoFileId == f.Id))
+            .ToListAsync(cancellationToken);
+        return [.. attached, .. photo];
+    }
+
+    public async Task RemoveGroupAsync(Conversation group, CancellationToken cancellationToken = default)
+    {
+        await db.ConversationReads.Where(r => r.ConversationId == group.Id).ExecuteDeleteAsync(cancellationToken);
+        await db.MessageReads.Where(r => db.Messages.Any(m => m.Id == r.MessageId && m.ConversationId == group.Id)).ExecuteDeleteAsync(cancellationToken);
+        // their mentions and attachments go with them (cascade)
+        await db.Messages.Where(m => m.ConversationId == group.Id).ExecuteDeleteAsync(cancellationToken);
+        db.Conversations.Remove(group);
+    }
 
     public Task<Message?> MessageForDeleteAsync(long id, CancellationToken cancellationToken = default)
         => db.Messages.Include(m => m.Attachments).ThenInclude(a => a.File).SingleOrDefaultAsync(m => m.Id == id, cancellationToken);
@@ -291,18 +336,27 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
             .ToList();
     }
 
-    /// <summary>Announcements, the group chats of <paramref name="teamIds"/> and the user's direct chats.</summary>
+    /// <summary>Announcements, the group chats of <paramref name="teamIds"/>, the custom groups the user is in and their direct chats.</summary>
     private IQueryable<Conversation> ChatsOf(long userId, IReadOnlyCollection<long> teamIds)
     {
         var teams = teamIds.ToList();
         return db.Conversations.AsNoTracking()
             .Where(c => c.Type == ConversationType.Announcements
-                || (c.TeamId != null && teams.Contains(c.TeamId.Value)) || c.DmUserLowId == userId || c.DmUserHighId == userId);
+                || (c.TeamId != null && teams.Contains(c.TeamId.Value)) || c.DmUserLowId == userId || c.DmUserHighId == userId
+                || (c.Type == ConversationType.CustomGroup && c.Members.Any(m => m.UserId == userId)));
     }
+
+    private static async Task<IReadOnlyList<ChatGroup>> Groups(IQueryable<Conversation> conversations, CancellationToken cancellationToken)
+        => (await conversations.AsNoTracking()
+                .OrderBy(c => c.Name).ThenBy(c => c.Id)
+                .Select(c => new { c.Id, c.Name, c.PhotoFileId, c.CreatedAt, MemberIds = c.Members.Select(m => m.UserId).ToList() })
+                .ToListAsync(cancellationToken))
+            .Select(c => new ChatGroup(c.Id, c.Name ?? string.Empty, c.PhotoFileId, c.MemberIds, c.CreatedAt))
+            .ToList();
 
     /// <summary>
     /// Messages others sent in these conversations after the user's read marker. What was announced before the user
-    /// joined isn't theirs to catch up on: they can read it, but it doesn't count.
+    /// joined isn't theirs to catch up on: they can read it, but it doesn't count. A custom group's grey lines never count.
     /// </summary>
     private IQueryable<Message> Unread(long userId, List<long> conversationIds, DateTime joined)
         => from m in db.Messages.AsNoTracking()
@@ -310,6 +364,7 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
            from r in reads.DefaultIfEmpty()
            where conversationIds.Contains(m.ConversationId)
                && m.SenderId != userId
+               && m.Kind != MessageKinds.GroupEvent
                && (r == null || r.LastReadMessageId == null || m.Id > r.LastReadMessageId)
                && (m.Conversation.Type != ConversationType.Announcements || m.CreatedAt >= joined)
            select m;

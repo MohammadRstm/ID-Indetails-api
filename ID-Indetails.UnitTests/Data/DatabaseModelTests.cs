@@ -16,11 +16,11 @@ public class DatabaseModelTests
         => Entity<T>().GetCheckConstraints().Select(c => c.ModelName).ToList();
 
     [Fact]
-    public void Model_has_all_110_tables_with_snake_case_names()
+    public void Model_has_all_111_tables_with_snake_case_names()
     {
         var tables = Model.GetEntityTypes().Select(e => e.GetTableName()!).ToList();
 
-        tables.Count.ShouldBe(110);
+        tables.Count.ShouldBe(111);
         tables.ShouldAllBe(t => t == t.ToLowerInvariant() && !t.Contains(' '));
     }
 
@@ -47,6 +47,8 @@ public class DatabaseModelTests
             "project_budgets", "project_budget_lines",
             // the months an advance takes from are part of it
             "salary_advance_repayments",
+            // a custom chat group's members are part of it
+            "conversation_members",
         };
 
         var cascading = Model.GetEntityTypes()

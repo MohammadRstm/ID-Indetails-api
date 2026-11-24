@@ -15,10 +15,10 @@ public sealed class PushQueue(PushChannel channel, IOptions<PushOptions> options
     public void Notifications(IEnumerable<Notification> rows, bool digest = false)
         => _notifications.AddRange(rows.Select(row => (row, digest)));
 
-    public void Message(long messageId, long? teamId, IEnumerable<long> recipientIds, IEnumerable<long> mentionedIds, bool announcement = false)
+    public void Message(long messageId, long? teamId, IEnumerable<long> recipientIds, IEnumerable<long> mentionedIds, bool announcement = false, long? groupId = null)
     {
         var mentioned = mentionedIds.ToHashSet();
-        _jobs.AddRange(recipientIds.Distinct().Select(id => new MessagePushJob(id, messageId, teamId, mentioned.Contains(id), announcement)));
+        _jobs.AddRange(recipientIds.Distinct().Select(id => new MessagePushJob(id, messageId, teamId, mentioned.Contains(id), announcement, groupId)));
     }
 
     public void Reminder(long userId, string kind, PushTarget target, string? projectTitle)

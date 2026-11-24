@@ -13,7 +13,7 @@ namespace ID_Indetails.api.Business.Messaging;
 /// grey before. A message for nobody (a team chat of one) stays at one grey.</item>
 /// <item>When they saw it: the exact time for an announcement; in the other chats only when it is the last message
 /// they read, since the read marker keeps only when it last moved.</item>
-/// <item>Who sees all this: a message's sender; in team chats the super admins too, for any message; in
+/// <item>Who sees all this: a message's sender; in team chats and custom groups the super admins in them too, for any message; in
 /// Announcements whoever may announce.</item>
 /// </list>
 /// </summary>
@@ -63,7 +63,7 @@ public static class MessageReceipts
     public static bool CanSee(ConversationType type, long viewerId, bool viewerIsSuperAdmin, bool viewerAnnounces, long senderId)
         => viewerId == senderId || type switch
         {
-            ConversationType.Group => viewerIsSuperAdmin,
+            ConversationType.Group or ConversationType.CustomGroup => viewerIsSuperAdmin,
             ConversationType.Announcements => viewerAnnounces,
             _ => false,
         };

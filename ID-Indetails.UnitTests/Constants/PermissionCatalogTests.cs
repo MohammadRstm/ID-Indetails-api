@@ -106,6 +106,14 @@ public class PermissionCatalogTests
     }
 
     [Fact]
+    public void Only_super_admins_manage_chat_groups()
+    {
+        GrantsOf(RoleCodes.SuperAdmin).ShouldContain(PermissionCodes.MessageManageGroups);
+        GrantsOf(RoleCodes.Admin).ShouldNotContain(PermissionCodes.MessageManageGroups);
+        GrantsOf(RoleCodes.Employee).ShouldNotContain(PermissionCodes.MessageManageGroups);
+    }
+
+    [Fact]
     public void Admins_manage_project_files_but_only_super_admins_choose_and_publish_what_clients_see()
     {
         GrantsOf(RoleCodes.Admin).ShouldContain(PermissionCodes.ProjectFilesManage);
