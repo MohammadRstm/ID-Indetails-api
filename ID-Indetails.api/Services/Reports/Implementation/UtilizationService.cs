@@ -62,7 +62,7 @@ public sealed class UtilizationService(
         {
             var work = Overtime.Of(personMonth.Input.Work, personMonth.Input.Calendar);
             var ledger = SalaryCalculator.LedgerOf(personMonth.Input, work);
-            var hours = new UtilizationRules.Hours(work.Sum(w => w.Minutes), ledger.Expected, ledger.Excused, ledger.Overtime);
+            var hours = new UtilizationRules.Hours(work.Sum(w => w.Minutes) + ledger.Breaks, ledger.Expected, ledger.Excused, ledger.Overtime);
             if (hours.Logged == 0 && hours.Expected == 0)
             {
                 // not employed in the month

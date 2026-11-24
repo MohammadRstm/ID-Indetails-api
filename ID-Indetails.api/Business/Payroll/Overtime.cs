@@ -7,7 +7,8 @@ namespace ID_Indetails.api.Business.Payroll;
 /// <list type="bullet">
 /// <item>all time on a day off;</item>
 /// <item>time before the day's start or after its end;</item>
-/// <item>time within the hours beyond the day's required hours, taken from the latest work of the day.</item>
+/// <item>time within the hours beyond the day's required hours, taken from the latest work of the day. From
+/// <see cref="WorkWeek.BreakCountsFrom"/> that time is the break worked, not overtime: the whole span is normal.</item>
 /// </list>
 /// </summary>
 public static class Overtime
@@ -37,7 +38,7 @@ public static class Overtime
             }
 
             var inside = day.ToDictionary(w => w.Id, w => Math.Max(0, Math.Min(w.End, hours.End) - Math.Max(w.Start, hours.Start)));
-            var excess = Math.Max(0, inside.Values.Sum() - hours.Required);
+            var excess = Math.Max(0, inside.Values.Sum() - hours.InHours);
 
             foreach (var w in day.OrderByDescending(w => w.End).ThenByDescending(w => w.Start))
             {

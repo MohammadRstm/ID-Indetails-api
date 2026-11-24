@@ -51,7 +51,7 @@ public sealed class ExcuseTrimmer(
         var worked = new[] { startDay, lastDay }.Where(d => normalByDay.GetValueOrDefault(d) > 0).ToHashSet();
         // the whole month's required minutes, as if it had ended: an excuse planned for later in the month stays
         var expected = HoursLedger.Build(month, month.AddMonths(1), input.JoinedOn, input.Calendar, splits,
-            new HoursLedger.Excuses(false, 0, new HashSet<DateOnly>()), input.LeftOn, input.Gaps).Expected;
+            new HoursLedger.Excuses(false, 0, new HashSet<DateOnly>()), input.LeftOn, input.Gaps).Required;
 
         var whole = live.FirstOrDefault(e => e.Kind == ExcuseKind.WholeMonth);
         if (whole is not null)

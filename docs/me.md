@@ -37,7 +37,7 @@ Rules (`Business/Requirements/MyRequirements.cs`):
 
 - The ledger applies to Design employees only. For anyone else (admins included) `applies` is false and there are no months.
 - The months run from this month back to the month the caller joined, 12 a page (`totalMonths` counts them all). Each is built exactly as on the Salaries screen (`HoursLedger`, through `SalaryCalculator.LedgerOf`):
-  - `expectedMinutes`: the required hours of the working days so far (up to yesterday while the month runs). `expectedFullMonthMinutes` covers the whole month, from the day the caller joined.
+  - `expectedMinutes`: the required hours of the working days so far (from 1 December 2026 their whole span, the break included; `insideMinutes` then includes the break taken), up to yesterday while the month runs. `expectedFullMonthMinutes` covers the whole month, from the day the caller joined.
   - `excusedMinutes` and `wholeMonthExcused`: excused time, paid or not.
   - `insideMinutes`: work within the caller's hours.
   - `madeUpMinutes`: overtime that made up missing hours, in date order.
@@ -54,7 +54,7 @@ Rules (`Business/Requirements/MyRequirements.cs`):
 |---|---|---|
 | `GET /api/me/overtime?month=YYYY-MM` | `work_entry:view_own` | The caller's overtime in a month (this month by default), day by day |
 
-- Overtime is time outside the caller's hours, all time on a day off, and time within hours beyond what the day requires (taken from the day's latest work).
+- Overtime is time outside the caller's hours, all time on a day off, and time within hours beyond what the day requires (taken from the day's latest work). From 1 December 2026 time within the hours is never overtime: past the required hours it is the break worked.
 - The month can't be in the future or before the caller joined (`400`).
 - Totals: overtime, how much of it made up missing hours and how much is paid as overtime (both null where the ledger doesn't apply), and the number of entries.
 - `days`: days with overtime, newest first, each with whether it was a day off and every entry: project (with its icon and tint), description, start and end, length, overtime and the part that made up missing hours. No money is shown.

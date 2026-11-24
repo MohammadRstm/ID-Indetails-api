@@ -38,9 +38,9 @@ public static class MyTime
 
     public sealed record Estimate(decimal EarnedSoFar, decimal? FullMonth, decimal WouldLose);
 
-    /// <summary>The required minutes of the whole month, from the day the person joined.</summary>
+    /// <summary>The expected minutes of the whole month, from the day the person joined (the break included once it counts).</summary>
     public static int ExpectedFullMonth(DateOnly month, DateOnly joinedOn, PersonCalendar calendar)
-        => HoursLedger.Days(joinedOn > month ? joinedOn : month, month.AddMonths(1)).Sum(d => calendar.HoursOn(d)?.Required ?? 0);
+        => HoursLedger.Days(joinedOn > month ? joinedOn : month, month.AddMonths(1)).Sum(d => calendar.HoursOn(d)?.Expected ?? 0);
 
     public static LedgerStatus StatusOf(HoursLedger.Result ledger, bool wholeMonthExcused)
         => wholeMonthExcused ? LedgerStatus.Excused
