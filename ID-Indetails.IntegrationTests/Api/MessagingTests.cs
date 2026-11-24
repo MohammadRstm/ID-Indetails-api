@@ -197,12 +197,14 @@ public class MessagingTests(ApiFactory api) : IClassFixture<ApiFactory>
         var teammate = await InTeamAsync(superAdmin, DomainCodes.Design, engineering);
         var analyst = await InTeamAsync(superAdmin, DomainCodes.Design, data);
 
-        var hello = await SendAsync($"teams/{engineering}", new { body = "Morning" }, engineer);
+        // in a direct chat: messages left in a team chat would be unread for whoever later joins the team
+        var chat = $"direct/{teammate.User.Id}";
+        var hello = await SendAsync(chat, new { body = "Morning" }, engineer);
         var recording = await FileTests.UploadVoiceNoteAsync(Client, engineer.AccessToken);
-        var voice = await SendAsync($"teams/{engineering}", new { body = "", attachmentIds = new[] { recording.Id } }, engineer);
+        var voice = await SendAsync(chat, new { body = "", attachmentIds = new[] { recording.Id } }, engineer);
         var key = await _steps.ScalarAsync<string>("SELECT storage_key FROM files WHERE id = @id", ("@id", recording.Id));
         // the teammate has read up to the voice message, so their read marker stands on it
-        await OkAsync<MessagesBadgeResponse>(Client.PostJsonAsync($"/api/messages/teams/{engineering}/read", new { }, teammate.AccessToken));
+        await OkAsync<MessagesBadgeResponse>(Client.PostJsonAsync($"/api/messages/direct/{engineer.User.Id}/read", new { }, teammate.AccessToken));
 
         // only the sender deletes, only a voice message, and only in a chat they can read
         await (await Client.DeleteAsync($"/api/messages/{voice.Id}", teammate.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
@@ -212,18 +214,15 @@ public class MessagingTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await Client.DeleteAsync($"/api/messages/{voice.Id}", engineer.AccessToken)).StatusCode.ShouldBe(System.Net.HttpStatusCode.NoContent);
 
         // nothing is left: not the message, not its file, not the recording on disk
-        foreach (var reader in new[] { engineer, teammate })
-        {
-            (await PageAsync($"teams/{engineering}", reader)).Items.Select(m => m.Id).ShouldBe([hello.Id]);
-        }
-
+        (await PageAsync(chat, engineer)).Items.Select(m => m.Id).ShouldBe([hello.Id]);
+        (await PageAsync($"direct/{engineer.User.Id}", teammate)).Items.Select(m => m.Id).ShouldBe([hello.Id]);
         await (await Client.GetAsync($"/api/files/{recording.Id}", engineer.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
         File.Exists(Path.Combine(api.FilesRoot, key)).ShouldBeFalse();
         await (await Client.DeleteAsync($"/api/messages/{voice.Id}", engineer.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
 
         // the teammate's marker moved back to the message before, so the chat still reads as read and new messages count
         (await BadgeAsync(teammate)).Unread.ShouldBe(0);
-        await SendAsync($"teams/{engineering}", new { body = "Back" }, engineer);
+        await SendAsync(chat, new { body = "Back" }, engineer);
         (await BadgeAsync(teammate)).Unread.ShouldBe(1);
 
         // an announcement read by others goes too, with the times they read it
