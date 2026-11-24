@@ -42,6 +42,15 @@ public sealed class FilesController(IFileService fileService) : ControllerBase
     public Task<ActionResult<FileResponse>> UploadVoice(CancellationToken cancellationToken)
         => ReceiveAsync(fileService.UploadVoiceAsync, cancellationToken);
 
+    /// <summary>A document for a work entry (PDF, Word, Excel, PowerPoint or CSV, up to 25 MB); otherwise as <see cref="Upload"/>.</summary>
+    [HttpPost("document")]
+    [EnableRateLimiting(RateLimitPolicies.Upload)]
+    [RequestSizeLimit(FileRules.MaxDocumentBytes + EnvelopeBytes)]
+    [Consumes("multipart/form-data")]
+    [DisableFormBinding]
+    public Task<ActionResult<FileResponse>> UploadDocument(CancellationToken cancellationToken)
+        => ReceiveAsync(fileService.UploadDocumentAsync, cancellationToken);
+
     private async Task<ActionResult<FileResponse>> ReceiveAsync(
         Func<Stream, string?, long, CancellationToken, Task<FileResponse>> store, CancellationToken cancellationToken)
     {
