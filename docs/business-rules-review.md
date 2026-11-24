@@ -110,7 +110,7 @@ See [messaging.md](messaging.md).
 | C3 | **No bell notifications for messages.** The messages badge (unread count and the "@" flag) covers them, as in the prototype. |
 | C4 | **A team with chat history can't be deleted**, so history is never lost. |
 | C5 | **Live updates** push small "something changed" signals over SignalR for messages and the bell, only once a request has succeeded; the client reloads what changed. One API instance for now: several would need a SignalR backplane. |
-| C6 | **Only a voice message can be deleted, by its sender** (24 Nov 2026). It goes for everyone with its recording, leaving nothing behind; everything else said in a chat stays. |
+| C6 | **Whoever sent a message can delete it** (24 Nov 2026, first for voice messages, then for every message). It goes for everyone with its files, leaving nothing behind. A shared work-entry comment stays. |
 
 ## Carried over from the prototype as-is
 
