@@ -143,9 +143,11 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
     its projects by the in-hours minutes worked on each, in whole minutes; a day logged in part shares that part (5 of 7
     hours, 5/7 of it), and the rest is a company cost, counted with paid leave. Projects show each contributor's break
     minutes (`breakMinutes`).
+  - **The break counts in people's hours** (24 November 2026, from 1 December 2026, `WorkWeek.BreakCountsFrom`): a month expects each working day's whole span (8h on a 9–5, so 184h in a 23-day month); 7h logged inside the hours take the break, which is added to what they worked and carried by the day's projects; a full 9–5 logged inside the hours worked the break: 8h of normal work, no break and no overtime; 7h inside plus 1h after is the break taken and 1h of real overtime (9h counted). Time inside the hours is never overtime from then on. A short day counts the part of the break its projects carry, and the company covers the rest (counted as excused, so its shortfall is its required hours, as before); excused minutes bring their share of the break the same way. A whole missed day is short its 8h once, not 8h plus the break. Before 1 December the old rules stand (expected = required hours; time inside the hours past them is overtime).
   - The hourly rate of a day is its salary ÷ that month's scheduled paid hours.
   - From 1 November 2026 a salary's overtime is paid only past the month's threshold: max(the working time's
-    `overtimeThresholdHours`, 184; the month's expected hours), counting every logged hour plus paid excuses. It is
+    `overtimeThresholdHours`, 184; the month's expected hours), counting every logged hour plus paid excuses (and,
+    from 1 December 2026, the break taken each day). It is
     fixed whatever the joining date. The premium is a company cost, never put on projects.
     Employees see their overtime minutes as before; only Salaries shows what is paid ([company.md](docs/company.md),
     "The overtime threshold").

@@ -35,9 +35,10 @@ public class PaidBreaksTests
 
         PaidBreaks.Allocate(work, Calendar).ShouldBe([new PaidBreaks.Share(10, Tuesday, 26m), new PaidBreaks.Share(20, Tuesday, 8m)], ignoreOrder: true);
         PaidBreaks.Unshared(work, Calendar).ShouldBe([(Tuesday, 26)]);
-        PaidBreaks.SharedOf(60, 420, 420).ShouldBe(60);
-        PaidBreaks.SharedOf(60, 480, 420).ShouldBe(60);
-        PaidBreaks.SharedOf(60, 210, 420).ShouldBe(30);
+        var day = new WorkHours(540, 1020, 60);
+        day.BreakTaken(420).ShouldBe(60);
+        day.BreakTaken(210).ShouldBe(30);
+        day.BreakUnshared(210).ShouldBe(30);
     }
 
     [Fact]

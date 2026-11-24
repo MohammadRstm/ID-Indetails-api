@@ -60,7 +60,7 @@ public static class SalaryCalculator
     /// <param name="OvertimeRate">The overtime rate of <paramref name="Terms"/>.</param>
     /// <param name="OvertimePaidMinutes">The overtime paid as overtime: past the threshold where one applies, otherwise what didn't make up a short month.</param>
     /// <param name="ThresholdMinutes">A salary's overtime is paid only past this many counted minutes; null where no threshold applies.</param>
-    /// <param name="CountedMinutes">What counts toward the threshold: every logged minute plus paid excuses; 0 where none applies.</param>
+    /// <param name="CountedMinutes">What counts toward the threshold: every logged minute, the break taken once it counts, and paid excuses; 0 where none applies.</param>
     /// <param name="PaidOvertimeByWork">The overtime paid as overtime, by work entry.</param>
     /// <param name="TimeOffDays">Working days of time off in the month, paid and unpaid.</param>
     /// <param name="Parts">The stretches of the month on one salary, oldest first.</param>
@@ -97,7 +97,8 @@ public static class SalaryCalculator
     /// When a salary's overtime is paid past a threshold: the working time's hours (184 from 1 November 2026) or the
     /// month's expected hours if those are more, so overtime is only paid once the month's own hours are done. It is
     /// fixed: joining or leaving mid-month doesn't lower it. Counted: every logged minute, overtime or not, plus paid
-    /// excuses (unpaid ones don't count). Paid: what is counted past the threshold, taken from the month's latest
+    /// excuses (unpaid ones don't count). From <see cref="WorkWeek.BreakCountsFrom"/> the expected hours include the
+    /// break and so does what is counted: the break taken each day (none on a full 9 to 5 logged, which worked it). Paid: what is counted past the threshold, taken from the month's latest
     /// overtime, and never more than the overtime left after making up a short month.
     /// </summary>
     /// <param name="Minutes">The threshold, in minutes.</param>
@@ -270,11 +271,14 @@ public static class SalaryCalculator
             return null;
         }
 
-        var expected = monthDays.Sum(d => d.Hours!.Required);
+        var expected = monthDays.Sum(d => d.Hours!.Expected);
         var paidExcuses = input.Excuses.Where(e => e.IsPaid).Sum(e => e.Kind == ExcuseKind.WholeMonth
             ? expected
-            : (e.Minutes ?? 0) + monthDays.Where(d => e.Days.Contains(d.Day)).Sum(d => d.Hours!.Required));
-        return new Threshold(Math.Max(hours * 60, expected), work.Sum(w => w.Minutes) + paidExcuses);
+            : (e.Minutes ?? 0) + HoursLedger.BreakShareOf(e.Minutes ?? 0, monthDays.Select(d => d.Hours!))
+                + monthDays.Where(d => e.Days.Contains(d.Day)).Sum(d => d.Hours!.Expected));
+        var normalByDay = work.GroupBy(w => w.Day).ToDictionary(g => g.Key, g => g.Sum(w => w.Normal));
+        var breaks = monthDays.Where(d => d.Hours!.BreakCounts).Sum(d => d.Hours!.BreakTaken(normalByDay.GetValueOrDefault(d.Day)));
+        return new Threshold(Math.Max(hours * 60, expected), work.Sum(w => w.Minutes) + breaks + paidExcuses);
     }
 
     /// <summary>The overtime paid past the threshold, by work entry: <paramref name="past"/> minutes taken from the latest overtime first.</summary>
@@ -309,7 +313,7 @@ public static class SalaryCalculator
 
     /// <summary>
     /// The shortfall, plus the paid break of each missed day the shortfall still covers: a whole missed day costs
-    /// the full paid day, not just its required hours. Deducted once the month closes; while it runs, it is what
+    /// the full paid day, not just its required hours. Once the break counts, the shortfall already holds it. Deducted once the month closes; while it runs, it is what
     /// would come off.
     /// </summary>
     public static int ShortfallMinutes(HoursLedger.Result ledger, PersonCalendar calendar)
@@ -318,13 +322,13 @@ public static class SalaryCalculator
         var breaks = 0;
         foreach (var hours in ledger.MissedDays.Select(calendar.HoursOn).OfType<WorkHours>())
         {
-            if (remaining < hours.Required)
+            if (remaining < hours.Expected)
             {
                 break;
             }
 
-            remaining -= hours.Required;
-            breaks += hours.PaidBreak;
+            remaining -= hours.Expected;
+            breaks += hours.BreakCounts ? 0 : hours.PaidBreak;
         }
 
         return ledger.Short + breaks;

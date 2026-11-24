@@ -11,6 +11,12 @@ public static class WorkWeek
 {
     public const int BreakAfterMinutes = 360;
 
+    /// <summary>
+    /// The break counts in people's hours from this day (decided 24 November 2026): a month expects 8 hours a day on a
+    /// 9 to 5, the break taken is added to what was worked, and a full 9 to 5 logged is the break worked, not overtime.
+    /// </summary>
+    public static readonly DateOnly BreakCountsFrom = new(2026, 12, 1);
+
     public static byte ToMask(IEnumerable<int> weekdays) => (byte)weekdays.Aggregate(0, (mask, day) => mask | (1 << day));
 
     public static IReadOnlyList<int> FromMask(byte mask) => Enumerable.Range(0, 7).Where(day => (mask & (1 << day)) != 0).ToList();

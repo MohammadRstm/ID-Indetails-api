@@ -8,7 +8,8 @@ namespace ID_Indetails.api.Business.Finance;
 /// The daily break is paid: 7 required hours are 8 paid hours. Project cost counts everyone's paid break as labour, at
 /// that day's rate, shared across the day's projects by the in-hours minutes worked on each (decided 19 November 2026):
 /// <list type="bullet">
-/// <item>a day with its required hours logged shares the whole break (none on days of 6 hours or less);</item>
+/// <item>a day with its required hours logged shares the whole break (none on days of 6 hours or less), less any of it
+/// worked: from <see cref="WorkWeek.BreakCountsFrom"/> a full 9 to 5 logged took no break, so none is shared;</item>
 /// <item>a day logged only in part shares that part of it: 5 of 7 required hours, 5/7 of the break. The rest is still paid,
 /// a company cost (<see cref="Unshared"/>);</item>
 /// <item>in whole minutes, the remainder to the project with the most of the day.</item>
@@ -40,7 +41,12 @@ public static class PaidBreaks
             }
 
             var normal = day.Sum(s => s.Normal);
-            var shared = SharedOf(breakMinutes, normal, calendar.HoursOn(day.Key)!.Required);
+            var shared = calendar.HoursOn(day.Key)!.BreakTaken(normal);
+            if (shared <= 0)
+            {
+                continue;
+            }
+
             var projects = day
                 .GroupBy(s => projectOf[s.Id])
                 .Select(g => (ProjectId: g.Key, Normal: g.Sum(s => s.Normal)))
@@ -55,12 +61,6 @@ public static class PaidBreaks
         return shares;
     }
 
-    /// <summary>The minutes of a day's break that go to its projects: all of it once the required hours are logged, its part before.</summary>
-    public static int SharedOf(int breakMinutes, int normalMinutes, int requiredMinutes)
-        => requiredMinutes <= 0 || normalMinutes >= requiredMinutes
-            ? breakMinutes
-            : (int)Math.Round(breakMinutes * (decimal)normalMinutes / requiredMinutes, MidpointRounding.AwayFromZero);
-
     /// <summary>
     /// The paid break minutes no project carries, day by day: the rest of the break of a day logged only in part. Salaries
     /// pays the whole break, so the company overview counts these as a company cost.
@@ -71,7 +71,7 @@ public static class PaidBreaks
             .GroupBy(s => s.Day)
             .Select(day => (Day: day.Key, Hours: calendar.HoursOn(day.Key), Normal: day.Sum(s => s.Normal)))
             .Where(d => d.Hours is { PaidBreak: > 0 })
-            .Select(d => (d.Day, d.Hours!.PaidBreak - SharedOf(d.Hours.PaidBreak, d.Normal, d.Hours.Required)))
+            .Select(d => (d.Day, d.Hours!.BreakUnshared(d.Normal)))
             .Where(d => d.Item2 > 0)
             .ToList();
 
