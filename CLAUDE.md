@@ -222,6 +222,7 @@ This file is how every new session learns the project, so keep it true:
 - **Enums** are snake_case in JSON (`payment_voided`). A model binder (`Middlewares/SnakeCaseEnumBinder.cs`) makes query and route enums take the same spelling.
 - **Rules are pure:** `Business/*Rules.cs` return a `RuleDenial`, and the service throws it.
 - **Pocket money ledger:** `pocket_entries`, signed from the pocket's side (a contribution is positive, a payout negative), never edited. Its balance is the sum. Sites ask for money in `pocket_requests`, each decided once.
+- **Chat members:** team chats work their members out live (team, domain admins, super admins) and store none. Custom chat groups (`custom_group`) store theirs in `conversation_members`, and a super admin is in one only when added. Their grey `group_event` lines never count as unread or push.
 - **The phone's materials routes:** the phone app still records site expenses at `/api/projects/{id}/materials`, which
   the same controller serves alongside `/site-expenses` until the phone moves. Permissions keep their `material:*` codes,
   and stored activity, notification and blocked-change kinds keep their `material_*` names.
