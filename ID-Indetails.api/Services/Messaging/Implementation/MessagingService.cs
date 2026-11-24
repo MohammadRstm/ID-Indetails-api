@@ -27,7 +27,7 @@ namespace ID_Indetails.api.Services.Messaging.Implementation;
 /// Chats are addressed by team or by person, never by an internal id. A conversation row is created with its first
 /// message; Announcements, the one chat everyone reads, was created with the migration that added it. A team chat the
 /// caller isn't in, or a person they can't reach, reads as not found. Sending marks the chat read for the sender.
-/// Messages can't be edited, and only a voice message can be deleted, by its sender. Their ticks and "Seen by" come from the read markers (<see cref="MessageReceipts"/>).
+/// Messages can't be edited; whoever sent one can delete it, with its files. Their ticks and "Seen by" come from the read markers (<see cref="MessageReceipts"/>).
 /// </summary>
 public sealed class MessagingService(
     ICurrentUser currentUser,
@@ -159,11 +159,11 @@ public sealed class MessagingService(
             throw new NotFoundException(MessageNotFound);
         }
 
-        var recordings = message.Attachments.Select(a => a.File).ToList();
-        MessagingRules.CheckDelete(message.SenderId, me.Id, message.Kind, recordings.Select(f => f.MimeType)).ThrowIfDenied();
+        var attached = message.Attachments.Select(a => a.File).ToList();
+        MessagingRules.CheckDelete(message.SenderId, me.Id, message.Kind).ThrowIfDenied();
 
         await messaging.RemoveAsync(message, cancellationToken);
-        foreach (var file in recordings)
+        foreach (var file in attached)
         {
             files.Remove(file);
         }
@@ -172,7 +172,7 @@ public sealed class MessagingService(
         await transaction.CommitAsync(cancellationToken);
 
         // The rows are gone first: a stray file on disk is harmless, a row without its file isn't.
-        foreach (var file in recordings)
+        foreach (var file in attached)
         {
             storage.Delete(file.StorageKey);
         }

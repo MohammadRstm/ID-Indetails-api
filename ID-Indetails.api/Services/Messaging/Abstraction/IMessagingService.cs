@@ -24,8 +24,8 @@ public interface IMessagingService
     Task<MessageReceiptsResponse> ReceiptsAsync(long messageId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Deletes the caller's own voice message for everyone: the message and its recordings are gone, from the database
-    /// and from storage. A message the caller can't read reads as not found.
+    /// Deletes the caller's own message for everyone: the message and its photos, videos and voice notes are gone, from
+    /// the database and from storage. A message the caller can't read reads as not found.
     /// </summary>
     Task DeleteAsync(long messageId, CancellationToken cancellationToken = default);
 

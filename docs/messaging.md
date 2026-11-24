@@ -21,7 +21,7 @@ All of them need only a signed-in, active user, except writing in Announcements 
 | `GET /api/messages/announcements?before=&limit=50` | A page of Announcements, as for team chats |
 | `POST /api/messages/announcements` | `message:announce`: `{ body, attachmentIds }`, no mentions (`400`). Returns `201` |
 | `POST /api/messages/announcements/read` | As for team chats |
-| `DELETE /api/messages/{messageId}` | Deletes the caller's own voice message for everyone ([below](#deleting-a-voice-message)). Returns `204` |
+| `DELETE /api/messages/{messageId}` | Deletes the caller's own message for everyone, with its files ([below](#deleting-a-message)). Returns `204` |
 | `GET /api/messages/{messageId}/receipts` | Who has seen the message (`seen`, each with `at` where known), who has received it without reading it (`delivered`) and who hasn't (`notReceived`), with the `summary`. For the people who see receipts ([below](#ticks-and-seen-by)): `403` for anyone else in the chat, `404` for a message they can't read |
 
 ### Ticks and Seen by
@@ -49,7 +49,7 @@ Contacts, team members and the people of direct chats carry `online` (the app op
 - **Announcements.** One chat that every active member of staff reads: every role and domain, the website's staff included (portal clients aren't staff). Only holders of `message:announce`, the super admins by default, write in it (`403` otherwise). A new message pushes to everyone else's phone, titled "Announcements" (category `messages`), and counts in their badge; there is no bell notification. What was announced before someone joined (`users.created_at`) never counts as unread for them, though they can read it.
 - **Mentions** are only for team chats, and only of the chat's members (`400`). A mention lights up the member's badge (`mention: true`) until they read the chat.
 - **Unread** means sent by someone else after the reader's read marker. Sending marks the chat read for the sender, and read markers only move forward.
-- **Messages** are up to 4,000 characters and can't be edited. Only a voice message can be deleted ([below](#deleting-a-voice-message)). A message has text, photos, videos or a voice note, or any mix: `attachmentIds` takes up to 10 of the sender's own uploads, each attached once, which the chat's people can then download ([files.md](files.md)). Each message lists its `attachments`.
+- **Messages** are up to 4,000 characters and can't be edited. Their sender can delete them ([below](#deleting-a-message)). A message has text, photos, videos or a voice note, or any mix: `attachmentIds` takes up to 10 of the sender's own uploads, each attached once, which the chat's people can then download ([files.md](files.md)). Each message lists its `attachments`.
 - **One voice note per message.** At most one of the attachments is an audio file, from `POST /api/files/voice` (`422 too_many_voice_notes`, "A message can carry one voice note."). It works the same in team chats, direct messages and Announcements; the recording is sent as the message's only attachment, with no text, and the attachment's `kind` is `audio`.
 - **Shared comments.** A work-entry comment posted with `sendToGroup: true` also goes to the entry author's team chat as a `task_comment` message: the comment text, the entry as it is now (`taskComment`: author, project, description and start; null once the entry is deleted). Its `minutes` and `attachment` are only filled for readers who may read the entry itself (its author and holders of `work_entry:view_all`): colleagues' hours stay private, and a mention of everyone in the chat, the prototype's @all. If the author is in no team, the comment is refused (`422 no_team_chat`).
 - **Teams.** A team whose chat has messages can't be deleted (`422 team_has_chat`), so history is never lost. Rename it instead.
@@ -59,12 +59,12 @@ Contacts, team members and the people of direct chats carry `online` (the app op
   ever cleared out). Each message says so as `viaProton`, and the chat shows a small "with Proton" mark, so recipients
   know. See [proton.md](proton.md#messages-sent-as-the-user-stage-5-phase-7).
 
-## Deleting a voice message
+## Deleting a message
 
-Decided 24 November 2026 (`MessagingRules.CheckDelete`, `MessagingService.DeleteAsync`):
+Decided 24 November 2026 for voice messages, and widened the same day to every message (`MessagingRules.CheckDelete`, `MessagingService.DeleteAsync`):
 
-- **Only the sender**, at any time, in a team chat, a direct chat or Announcements: anyone else in the chat gets `403`, and a message the caller can't read `404`. Only a message that carries a voice note can be deleted (`422 message_not_deletable`, "Only voice messages can be deleted."): text, photos, videos and shared comments stay, as before.
-- **Nothing is left.** The message goes for everyone, with no "deleted" placeholder, and so do its attachments' files: their rows in the same transaction and then the recordings on disk (`IFileStorage.Delete`). The chat's last message and unread counts simply fall back to the message before.
+- **Only the sender**, at any time, in a team chat, a direct chat or Announcements: anyone else in the chat gets `403`, and a message the caller can't read `404`. Text, photos, videos and voice notes can all be deleted. A shared work-entry comment can't (`422 message_not_deletable`, "A shared work comment can't be deleted from the chat."): it belongs to the comment.
+- **Nothing is left.** The message goes for everyone, with no "deleted" placeholder, and so do its attachments' files: their rows in the same transaction and then the files on disk (`IFileStorage.Delete`). The chat's last message and unread counts simply fall back to the message before.
 - **Read and received markers** that stood on the message move back to the chat's message before it, and in Announcements the times people read it are dropped.
 - **Live.** Everyone in the chat gets the `messages` signal and reloads it. A push already delivered to a phone can't be called back; one still waiting is dropped, as its message is gone.
 - Proton doesn't delete messages: it opens the chat, where the sender deletes it from the message's menu.
@@ -76,7 +76,7 @@ A SignalR connection at `/hubs/live` tells signed-in clients that something chan
 | Signal | Payload | Sent to | Reload |
 |---|---|---|---|
 | `notifications` | — | Whoever got a notification, or read theirs (for their other devices) | `GET /api/notifications/unread-count`, and the open list |
-| `messages` | `{ teamId, userId, announcements }`: one of `teamId` and `userId` set, or `announcements: true` | Everyone in a team chat that got a message or lost a deleted voice message (the same for direct chats and Announcements); both sides of a direct message; every active person when Announcements gets one; whoever read a chat (for their other devices) | `GET /api/messages/badge`, the conversation list, and that chat if it's open |
+| `messages` | `{ teamId, userId, announcements }`: one of `teamId` and `userId` set, or `announcements: true` | Everyone in a team chat that got a message or lost a deleted one (the same for direct chats and Announcements); both sides of a direct message; every active person when Announcements gets one; whoever read a chat (for their other devices) | `GET /api/messages/badge`, the conversation list, and that chat if it's open |
 | `receipts` | As for `messages` | The senders of messages someone just received or read, and in team chats and Announcements the super admins | That chat if it's open, its open "Seen by", and the conversation list |
 
 - **Connecting.** It needs a signed-in user. Browsers pass the access token as the `access_token` query parameter, because WebSockets can't send headers; that parameter is only read on `/hubs/live`, and request logging stays at Warning so query strings aren't logged. The React client uses `@microsoft/signalr` with `accessTokenFactory`.

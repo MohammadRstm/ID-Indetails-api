@@ -31,7 +31,7 @@ public sealed class MessagesController(IMessagingService messagingService) : Con
     public Task<MessageReceiptsResponse> Receipts(long messageId, CancellationToken cancellationToken)
         => messagingService.ReceiptsAsync(messageId, cancellationToken);
 
-    /// <summary>Only the sender deletes, and only a voice message (<c>Business/Messaging/MessagingRules.CheckDelete</c>).</summary>
+    /// <summary>Only the sender deletes, any message but a shared work comment (<c>Business/Messaging/MessagingRules.CheckDelete</c>).</summary>
     [HttpDelete("{messageId:long}")]
     public async Task<IActionResult> Delete(long messageId, CancellationToken cancellationToken)
     {
