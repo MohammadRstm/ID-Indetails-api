@@ -304,7 +304,7 @@ public static class ProtonCoverage
         Action("Messages.MarkTeamRead", "propose_mark_chat_read"),
         Action("Messages.MarkAnnouncementsRead", "propose_mark_chat_read"),
         Action("Messages.SendAnnouncement", "propose_send_announcement", T2, ProtonFamily.Messaging),
-        Open("Messages.Delete", "it deletes a voice message for everyone and can't be undone: its sender does it from the message's menu, and Proton opens the chat"),
+        Open("Messages.Delete", "it deletes a message and its files for everyone and can't be undone: its sender does it from the message's menu, and Proton opens the chat"),
         Action("Messages.SendToGroup", "propose_send_message", T2, ProtonFamily.Messaging),
         Action("Messages.MarkGroupRead", "propose_mark_chat_read"),
         Open("Messages.CreateGroup", "who goes in a new chat group is picked from everyone on staff in its form: Proton opens the Messages page, where a super admin makes it"),

@@ -62,7 +62,7 @@ POST /api/proton/messages
     with. The planned ones are an Execution site's staff and daily logs, asking for and deciding pocket money, supervision taken, emailing invoices and payment receipts,
     planning and scheduling invoices, and a payment's account label, waiting for the Execution changes to settle, and
     setting a project's cost budget (Money, strong), which Proton reads with `get_project_budget` and opens on the project's financials tab;
-  - a place opened for the user (45): time off (see below), deleting a voice message (its sender's, from the message's menu), submitting, withdrawing and keeping a BOQ draft (the author's, on the BOQs page), what takes a password or a sign-in address (typed on its own form, never in a
+  - a place opened for the user (45): time off (see below), deleting a message (its sender's, from the message's menu), submitting, withdrawing and keeping a BOQ draft (the author's, on the BOQs page), what takes a password or a sign-in address (typed on its own form, never in a
     chat), someone's pay (pay amounts never reach Proton), and uploads, which need a file from the person's device;
   - elsewhere (34): what isn't the signed-in person's to do: signing in (the development sign-in too), someone else's invitation, the client's side of
     the portal, the phone app's own device, a website visitor's message, the development file store;

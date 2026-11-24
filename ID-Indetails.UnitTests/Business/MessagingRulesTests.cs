@@ -76,22 +76,19 @@ public class MessagingRulesTests
     }
 
     [Fact]
-    public void Only_the_sender_deletes_and_only_a_voice_message()
+    public void Only_the_sender_deletes_a_message_and_a_shared_work_comment_stays()
     {
-        MessagingRules.CheckDelete(7, 7, MessageKinds.Text, ["audio/webm"]).ShouldBeNull();
-        MessagingRules.CheckDelete(7, 7, MessageKinds.Text, ["audio/ogg", "image/png"]).ShouldBeNull();
+        MessagingRules.CheckDelete(7, 7, MessageKinds.Text).ShouldBeNull();
 
-        var someoneElse = MessagingRules.CheckDelete(7, 8, MessageKinds.Text, ["audio/webm"])!;
+        var someoneElse = MessagingRules.CheckDelete(7, 8, MessageKinds.Text)!;
         (someoneElse.Kind, someoneElse.Code).ShouldBe((DenialKind.Forbidden, ErrorCodes.Forbidden));
-        someoneElse.Message.ShouldBe("Only the person who sent a voice message can delete it.");
+        someoneElse.Message.ShouldBe("Only the person who sent a message can delete it.");
 
-        foreach (var (kind, types) in new (string Kind, string[] Types)[] { (MessageKinds.Text, []), (MessageKinds.Text, ["image/png"]), (MessageKinds.TaskComment, ["audio/webm"]) })
-        {
-            MessagingRules.CheckDelete(7, 7, kind, types)!.Code.ShouldBe(ErrorCodes.MessageNotDeletable);
-        }
+        var card = MessagingRules.CheckDelete(7, 7, MessageKinds.TaskComment)!;
+        (card.Code, card.Message).ShouldBe((ErrorCodes.MessageNotDeletable, "A shared work comment can't be deleted from the chat."));
 
-        // a group's grey line isn't a voice message either
-        MessagingRules.CheckDelete(7, 7, MessageKinds.GroupEvent, [])!.Code.ShouldBe(ErrorCodes.MessageNotDeletable);
+        // nor a group's grey line, the record of what changed
+        MessagingRules.CheckDelete(7, 7, MessageKinds.GroupEvent)!.Message.ShouldBe("A group's grey line can't be deleted: it says what changed in the group.");
     }
 
     [Fact]

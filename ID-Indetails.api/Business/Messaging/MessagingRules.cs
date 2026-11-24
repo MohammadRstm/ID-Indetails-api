@@ -15,7 +15,7 @@ namespace ID_Indetails.api.Business.Messaging;
 /// other domain. Nobody messages themselves, and only active people receive messages.</item>
 /// <item>Mentions exist only in group chats, and only of the chat's members.</item>
 /// <item>A message carries at most one voice note (an audio file) among its attachments.</item>
-/// <item>Only a voice message can be deleted, and only by whoever sent it. Everything else said in a chat stays.</item>
+/// <item>Whoever sent a message can delete it, whatever it carries. A shared work-entry comment stays: it belongs to the comment. So does a custom group's grey line, the record of what changed.</item>
 /// <item>Custom groups (decided 24 November 2026) have the members a holder of <c>message:manage_groups</c> picked:
 /// any active staff, from any business. Only members read and write in one, and someone taken out loses it, history
 /// included. Mentions there are of its members.</item>
@@ -79,17 +79,19 @@ public static class MessagingRules
             ? RuleDenial.BusinessRule(ErrorCodes.FileTypeNotAllowed, "Chats take photos, videos and voice notes.")
             : null;
 
-    /// <param name="attachmentTypes">The stored type (MIME) of each file attached to the message.</param>
-    public static RuleDenial? CheckDelete(long senderId, long callerId, string kind, IEnumerable<string> attachmentTypes)
+    public static RuleDenial? CheckDelete(long senderId, long callerId, string kind)
     {
         if (senderId != callerId)
         {
-            return RuleDenial.Forbidden(ErrorCodes.Forbidden, "Only the person who sent a voice message can delete it.");
+            return RuleDenial.Forbidden(ErrorCodes.Forbidden, "Only the person who sent a message can delete it.");
         }
 
-        return kind == MessageKinds.Text && attachmentTypes.Any(type => FileRules.KindOf(type) == FileKind.Audio)
-            ? null
-            : RuleDenial.BusinessRule(ErrorCodes.MessageNotDeletable, "Only voice messages can be deleted.");
+        return kind switch
+        {
+            MessageKinds.Text => null,
+            MessageKinds.GroupEvent => RuleDenial.BusinessRule(ErrorCodes.MessageNotDeletable, "A group's grey line can't be deleted: it says what changed in the group."),
+            _ => RuleDenial.BusinessRule(ErrorCodes.MessageNotDeletable, "A shared work comment can't be deleted from the chat."),
+        };
     }
 
     public static RuleDenial? CheckMentions(IReadOnlyCollection<long> mentionIds, IReadOnlySet<long>? memberIds)
