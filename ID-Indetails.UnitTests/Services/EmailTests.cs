@@ -108,4 +108,41 @@ public class EmailTests
     [InlineData("4bf92f35", "4bf92f35")]
     public void The_reference_a_person_reads_out_is_the_start_of_a_trace_id(string traceId, string reference)
         => SupportEmails.RefOf(traceId).ShouldBe(reference);
+
+    [Fact]
+    public void A_receipt_email_thanks_the_client_shows_where_the_project_stands_and_carries_the_note_and_pdf()
+    {
+        var payment = new PaymentResponse
+        {
+            Id = 31,
+            Project = new InvoiceProjectResponse(3, "Villa <Haddad>", "ID26Q4003-VH"),
+            Client = new InvoiceClientResponse(2, "Haddad Holdings"),
+            Amount = 2500m,
+            Currency = "USD",
+            FxRate = 1m,
+            AmountUsd = 2500m,
+            ReceivedOn = new DateOnly(2026, 11, 20),
+            Method = ID_Indetails.api.Enums.PaymentMethod.Cheque,
+            Note = "Internal: chased twice",
+        };
+        var mail = DocumentEmails.Receipt(
+            "client@x.test", payment, new ReceiptPosition(12_000m, 7_500m), Head, null, "Nadia Karam", "See you on site <Monday>.", new PdfFile([1], "receipt-r-31.pdf"));
+
+        mail.Subject.ShouldBe("Receipt R-31 - Villa <Haddad>");
+        mail.HtmlBody.ShouldContain("Payment received");
+        mail.HtmlBody.ShouldContain("$2,500.00");
+        mail.HtmlBody.ShouldContain("Still to pay");
+        mail.HtmlBody.ShouldContain("$4,500.00");
+        mail.HtmlBody.ShouldContain("See you on site &lt;Monday&gt;.");
+        mail.HtmlBody.ShouldContain("Villa &lt;Haddad&gt;");
+        mail.HtmlBody.ShouldNotContain("chased twice");
+        mail.TextBody.ShouldContain(DocumentEmails.ReceiptIntro("Villa <Haddad>", "Nov 20, 2026"));
+        mail.TextBody.ShouldContain("Paid so far, this payment included: $7,500.00");
+        mail.TextBody.ShouldContain("Received on Nov 20, 2026, by cheque");
+        mail.Attachments.ShouldNotBeNull().ShouldHaveSingleItem().FileName.ShouldBe("receipt-r-31.pdf");
+
+        // without a note, nothing stands in for it
+        DocumentEmails.Receipt("client@x.test", payment, new ReceiptPosition(0, 2500m), Head, null, "Nadia Karam", null, new PdfFile([1], "r.pdf"))
+            .HtmlBody.ShouldNotContain("Still to pay");
+    }
 }

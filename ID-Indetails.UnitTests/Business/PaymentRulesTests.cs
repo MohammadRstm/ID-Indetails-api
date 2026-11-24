@@ -98,4 +98,27 @@ public class PaymentRulesTests
         PaymentRules.ToApply(1000m, [(1, 1500m)]).ShouldBeEmpty();
         PaymentRules.ToApply(1000m, []).ShouldBeEmpty();
     }
+
+    [Fact]
+    public void A_receipt_counts_what_was_paid_by_its_payment_it_included()
+    {
+        var oct1 = new DateOnly(2026, 10, 1);
+        var oct5 = new DateOnly(2026, 10, 5);
+        PaymentRules.LivePayment[] live = [new(10, oct1, 1000m), new(14, oct5, 500m), new(12, oct5, 250m), new(11, new DateOnly(2026, 10, 9), 300m)];
+
+        // the same day counts the payments recorded before it, and later days don't count
+        PaymentRules.PaidUpTo(live, 12, oct5).ShouldBe(1250m);
+        PaymentRules.PaidUpTo(live, 14, oct5).ShouldBe(1750m);
+        // a payment backdated before the others counts only what came before it
+        PaymentRules.PaidUpTo(live, 10, oct1).ShouldBe(1000m);
+        PaymentRules.PaidUpTo(live, 11, new DateOnly(2026, 10, 9)).ShouldBe(2050m);
+    }
+
+    [Fact]
+    public void A_voided_payment_has_no_receipt()
+    {
+        PaymentRules.CheckReceipt(false).ShouldBeNull();
+        var denial = PaymentRules.CheckReceipt(true)!;
+        (denial.Code, denial.Message).ShouldBe((ErrorCodes.PaymentAlreadyVoided, "A voided payment has no receipt."));
+    }
 }

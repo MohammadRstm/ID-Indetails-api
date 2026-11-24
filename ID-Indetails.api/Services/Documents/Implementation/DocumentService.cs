@@ -87,6 +87,18 @@ public sealed class DocumentService(
         await SendAsync(DocumentEmails.Invoice(to, invoice, issuedOn, head, billing, sender, pdf), "invoice", invoice.Id, cancellationToken);
     }
 
+    public async Task<PdfFile> ReceiptPdfAsync(long paymentId, CancellationToken cancellationToken = default)
+        => (await ReceiptDocumentAsync(paymentId, cancellationToken)).Pdf;
+
+    public async Task EmailReceiptAsync(long paymentId, EmailReceiptRequest request, CancellationToken cancellationToken = default)
+    {
+        var (pdf, payment, position, head, billing) = await ReceiptDocumentAsync(paymentId, cancellationToken);
+        var note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim();
+        await SendAsync(
+            DocumentEmails.Receipt(request.To.Trim(), payment, position, head, billing, currentUser.FullName, note, pdf), "receipt", paymentId, cancellationToken);
+        await paymentService.RecordReceiptSentAsync(paymentId, cancellationToken);
+    }
+
     public async Task<PdfFile> BoqPdfAsync(long boqId, CancellationToken cancellationToken = default)
     {
         var document = await boqService.GetDocumentAsync(boqId, cancellationToken);
@@ -258,6 +270,20 @@ public sealed class DocumentService(
                 invoice.Balance ?? invoice.Total);
         }
         return (new PdfFile(InvoicePdf.Render(invoice, issuedOn, head, billing, position), name + ".pdf"), issuedOn, head, billing);
+    }
+
+    /// <summary>A payment's receipt, and what its email shows beside it. The project's total is today's, TVA included.</summary>
+    private async Task<(PdfFile Pdf, PaymentResponse Payment, ReceiptPosition Position, Letterhead Head, BillingSettings? Billing)> ReceiptDocumentAsync(
+        long paymentId, CancellationToken cancellationToken)
+    {
+        var (payment, paidSoFar) = await paymentService.ReceiptAsync(paymentId, cancellationToken);
+        var project = await projects.GetAsync(payment.Project.Id, cancellationToken) ?? throw new NotFoundException("Payment not found.");
+        var rollup = await moneyRollups.LoadAsync([project], cancellationToken);
+        var position = new ReceiptPosition(rollup.Money(project.Id).RevenueWithTva, paidSoFar);
+        var head = await LetterheadAsync(cancellationToken);
+        var billing = await billingSettings.GetAsync(payment.Domain, cancellationToken);
+        var pdf = new PdfFile(ReceiptPdf.Render(payment, position, head, billing), $"receipt-{ReceiptPdf.Number(payment).ToLowerInvariant()}.pdf");
+        return (pdf, payment, position, head, billing);
     }
 
     /// <summary>The logo is left out when it is an image PDFs can't hold (only PNG and JPEG can).</summary>

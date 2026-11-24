@@ -52,3 +52,14 @@ public sealed class ApplyPaymentRequestValidator : AbstractValidator<ApplyPaymen
         RuleFor(x => x.InvoiceId).GreaterThan(0).WithMessage("Invoice is required.");
     }
 }
+
+public sealed class EmailReceiptRequestValidator : AbstractValidator<EmailReceiptRequest>
+{
+    public const int MaxNoteLength = 1000;
+
+    public EmailReceiptRequestValidator()
+    {
+        RuleFor(x => x.To).ValidEmail();
+        RuleFor(x => x.Note).ClientText("Note", MaxNoteLength);
+    }
+}

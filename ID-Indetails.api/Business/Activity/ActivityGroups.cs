@@ -49,6 +49,7 @@ public static class ActivityGroups
         [ActivityEventKinds.PaymentApplied] = ActivityGroup.Billing,
         [ActivityEventKinds.PaymentVoided] = ActivityGroup.Billing,
         [ActivityEventKinds.PaymentLabelSet] = ActivityGroup.Billing,
+        [ActivityEventKinds.ReceiptSent] = ActivityGroup.Billing,
         [ActivityEventKinds.BoqCreated] = ActivityGroup.Billing,
         [ActivityEventKinds.BoqSubmitted] = ActivityGroup.Billing,
         [ActivityEventKinds.BoqSubmissionWithdrawn] = ActivityGroup.Billing,

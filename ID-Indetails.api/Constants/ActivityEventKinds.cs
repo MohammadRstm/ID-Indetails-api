@@ -139,6 +139,9 @@ public static class ActivityEventKinds
     public const string PaymentApplied = "payment_applied";
     public const string PaymentVoided = "payment_voided";
 
+    /// <summary>A payment's receipt was emailed to the client (<c>channel</c> in the payload).</summary>
+    public const string ReceiptSent = "receipt_sent";
+
     /// <summary>A payment's account label was set, changed or cleared (the label names in the payload).</summary>
     public const string PaymentLabelSet = "payment_label_set";
 

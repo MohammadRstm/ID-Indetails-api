@@ -19,6 +19,21 @@ public static class PaymentRules
 {
     public const string BaseCurrency = "USD";
 
+    /// <summary>A live payment of a project, for working out what the client had paid by one of them.</summary>
+    public sealed record LivePayment(long Id, DateOnly ReceivedOn, decimal AmountUsd);
+
+    /// <summary>
+    /// What the client had paid by this payment, it included, in USD: the project's live payments received before its
+    /// day, and those received on its day and recorded no later. A payment's receipt shows it, so it doesn't change when
+    /// later payments come in.
+    /// </summary>
+    public static decimal PaidUpTo(IEnumerable<LivePayment> live, long paymentId, DateOnly receivedOn)
+        => live.Where(p => p.ReceivedOn < receivedOn || (p.ReceivedOn == receivedOn && p.Id <= paymentId)).Sum(p => p.AmountUsd);
+
+    /// <summary>A receipt says that money was received, so a voided payment has none.</summary>
+    public static RuleDenial? CheckReceipt(bool isVoided)
+        => isVoided ? RuleDenial.BusinessRule(ErrorCodes.PaymentAlreadyVoided, "A voided payment has no receipt.") : null;
+
     public static decimal ToUsd(decimal amount, decimal ratePerUsd)
         => Math.Round(amount / ratePerUsd, 2, MidpointRounding.AwayFromZero);
 

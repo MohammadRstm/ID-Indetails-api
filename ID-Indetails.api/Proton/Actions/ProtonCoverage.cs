@@ -218,6 +218,7 @@ public static class ProtonCoverage
         Action("Payments.Apply", "propose_payment_step", T2, ProtonFamily.Money),
         Action("Payments.Void", "propose_payment_step", T2, ProtonFamily.Money),
         Planned("Payments.SetLabel", T2, ProtonFamily.Money),
+        Planned("Payments.EmailReceipt", T2, ProtonFamily.Money, externalSend: true),
         // bank fields are never shown to Proton nor stored in a proposal
         Action("BillingSettings.Save", "propose_billing_settings", T2, ProtonFamily.Money),
         Action("BillingSettings.AddExchangeRate", "propose_exchange_rate", T2, ProtonFamily.Money),

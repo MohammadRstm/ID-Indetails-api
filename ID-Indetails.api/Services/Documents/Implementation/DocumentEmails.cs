@@ -174,6 +174,65 @@ public static class DocumentEmails
             [Attachment(pdf)]);
     }
 
+    /// <summary>
+    /// A payment's receipt: thanks, the payment as the PDF shows it, where the project stands by it, and the sender's own
+    /// note when they wrote one.
+    /// </summary>
+    public static EmailMessage Receipt(
+        string to, PaymentResponse payment, ReceiptPosition position, Letterhead head, BillingSettings? billing, string senderName, string? note, PdfFile pdf)
+    {
+        var number = ReceiptPdf.Number(payment);
+        var amount = PdfLayout.Money(payment.Amount, payment.Currency);
+        var received = PdfLayout.Date(payment.ReceivedOn);
+        var intro = ReceiptIntro(payment.Project.Title, received);
+        var paymentRows = ReceiptPdf.PaymentRows(payment);
+        var positionRows = ReceiptPdf.PositionRows(position);
+
+        var html = Paragraph($"Hello {payment.Client.DisplayName},")
+            + Paragraph(intro)
+            + (note is null ? "" : Quote(note))
+            + Highlight("Payment received", amount, "Received on " + received)
+            + Facts(
+                ("Receipt", number),
+                ("Paid by", ReceiptPdf.Method(payment.Method)),
+                ("Reference", payment.Reference),
+                ("Invoice", payment.InvoiceNumber),
+                ("Project", payment.Project.Title))
+            // another currency: what it came to in dollars
+            + (paymentRows.Count > 1 ? Totals([.. paymentRows.Skip(1).Select(r => (r.Label, r.Value, r.Strong))]) : "")
+            + Heading("Your project")
+            + Totals([.. positionRows.Select(r => (r.Label, r.Value, r.Strong))])
+            + SignOff("With thanks,", senderName, head.CompanyName);
+
+        var sums = string.Join("
+", paymentRows.Concat(positionRows).Select(r => $"{r.Label}: {r.Value}"));
+        var text = $"""
+            Hello {payment.Client.DisplayName},
+
+            {intro}
+            {(note is null ? "" : $"
+{note}
+")}
+            Receipt {number} for {payment.Project.Title}
+            Received on {received}, by {ReceiptPdf.Method(payment.Method).ToLowerInvariant()}
+            {sums}
+
+            With thanks,
+            {senderName}
+            {head.CompanyName}
+            """;
+
+        return Compose(
+            to, null, $"Receipt {number} - {payment.Project.Title}",
+            Page(head.CompanyName, $"We received your payment of {amount}. Thank you.", html, Footer(head, billing)),
+            text,
+            [Attachment(pdf)]);
+    }
+
+    /// <summary>The receipt email's opening words, which the app shows before it is sent.</summary>
+    public static string ReceiptIntro(string projectTitle, string receivedOn)
+        => $"Thank you for your payment for {projectTitle}. This is to confirm that we received it on {receivedOn}. Your receipt is attached as a PDF for your records.";
+
     /// <summary>The invoice as the PDF shows it: who and what it is for, its lines, totals, notes and how to pay.</summary>
     private static string InvoiceBody(InvoiceResponse invoice, DateOnly? issuedOn, BillingSettings? billing, string intro, string highlight)
     {

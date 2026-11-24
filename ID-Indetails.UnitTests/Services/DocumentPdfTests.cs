@@ -235,4 +235,41 @@ public class DocumentPdfTests
         // the welcome doesn't push a short BOQ onto a second page
         Pages(BoqPdf.Render(document, new DateOnly(2026, 9, 30), Head)).ShouldBe(1);
     }
+
+    private static PaymentResponse Payment(string currency = "USD") => new()
+    {
+        Id = 31,
+        Domain = "design",
+        Project = new InvoiceProjectResponse(3, "Villa Haddad", "ID26Q4003-VH", "Broummana"),
+        Client = new InvoiceClientResponse(2, "Haddad Holdings"),
+        InvoiceNumber = "HL-2026-014",
+        Amount = currency == "USD" ? 2500m : 223_750_000m,
+        Currency = currency,
+        FxRate = currency == "USD" ? 1m : 89_500m,
+        AmountUsd = 2500m,
+        ReceivedOn = new DateOnly(2026, 11, 20),
+        Method = PaymentMethod.Bank,
+        Reference = "TRF-88",
+        Note = "Internal: chased twice",
+    };
+
+    [Fact]
+    public void A_receipt_is_one_page_with_the_companys_mark_and_where_the_project_stands()
+    {
+        var billing = new BillingSettings { Footer = "Thank you." };
+        var pdf = ReceiptPdf.Render(Payment(), new ReceiptPosition(12_000m, 7_500m), Head, billing);
+        Pages(pdf).ShouldBe(1);
+        Pictures(pdf, 0).ShouldBe(2);
+        Pages(ReceiptPdf.Render(Payment("LBP") with { Reference = null, InvoiceNumber = null }, new ReceiptPosition(0, 2500m), Head, null)).ShouldBe(1);
+        ReceiptPdf.Number(Payment()).ShouldBe("R-31");
+
+        ReceiptPdf.PaymentRows(Payment()).Select(r => (r.Label, r.Value)).ShouldBe([("Amount received", "$2,500.00")]);
+        ReceiptPdf.PaymentRows(Payment("LBP"))[1].ShouldBe(new TotalRow("In US dollars, at 89,500 LBP to the dollar", "$2,500.00"));
+
+        ReceiptPdf.PositionRows(new ReceiptPosition(12_000m, 7_500m)).Select(r => (r.Label, r.Value)).ShouldBe(
+            [("Project total", "$12,000.00"), ("Paid so far, this payment included", "$7,500.00"), ("Still to pay", "$4,500.00")]);
+        ReceiptPdf.PositionRows(new ReceiptPosition(12_000m, 13_000m)).Last().ShouldBe(new TotalRow("Paid ahead", "$1,000.00", Strong: true));
+        // a site with no agreed BOQ has no total yet: only what was paid
+        ReceiptPdf.PositionRows(new ReceiptPosition(0, 2500m)).ShouldHaveSingleItem().Label.ShouldBe("Paid so far, this payment included");
+    }
 }

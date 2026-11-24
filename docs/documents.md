@@ -1,6 +1,6 @@
 # Documents: PDFs and emailing them
 
-Invoices, client BOQs and variation orders, project reports, and the salaries and schedules lists are made as PDFs on the server (decision O3), with PDFsharp and MigraDoc (MIT licence). The layout is a plain first version. It will be refined later, without changing the endpoints.
+Invoices, payment receipts, client BOQs and variation orders, project reports, and the salaries and schedules lists are made as PDFs on the server (decision O3), with PDFsharp and MigraDoc (MIT licence). The layout is a plain first version. It will be refined later, without changing the endpoints.
 
 ## Endpoints
 
@@ -8,6 +8,8 @@ Invoices, client BOQs and variation orders, project reports, and the salaries an
 |---|---|---|
 | `GET /api/invoices/{id}/pdf` | `financial:view` | The invoice (`hl-2026-014.pdf`). A draft is marked DRAFT and a voided invoice VOID |
 | `POST /api/invoices/{id}/email` | `invoice:send` | `{ to, note }`: emails an issued invoice with its PDF attached, then records an `email` delivery (`201`, the invoice) |
+| `GET /api/payments/{id}/receipt` | `payment:record` and `financial:view` | A payment's receipt (`receipt-r-31.pdf`): the payment and where the project stands by it ([billing.md](billing.md#receipts)). A voided payment has none |
+| `POST /api/payments/{id}/receipt/email` | `payment:record` and `financial:view` | `{ to, note }`: emails the receipt with its PDF attached, then notes `receipt_sent` in the project's activity (`204`). Unlike the others, the `note` is in the email |
 | `GET /api/boqs/{id}/pdf` | `financial:view` or `project:pricing_manage` | A client BOQ or VO (`bq-2026-001.pdf`, `vo-2026-001.pdf`). An internal draft has none (`422 boq_internal`) |
 | `POST /api/boqs/{id}/email` | `project:pricing_manage` | `{ to, note }`: emails the BOQ with its PDF attached, then records an `email` delivery (`200`, the BOQ). Refused before anything is sent when the BOQ is internal, empty or on a finalised site |
 | `GET /api/design-vos/{id}/pdf` | `financial:view` | A Design variation order (`vo-2026-003.pdf`): its changes, the total before TVA, the TVA at the project's rate and the total, the hours outside the agreed scope when it shows them, and "FOR APPROVAL" while it is pending |
@@ -20,7 +22,7 @@ Invoices, client BOQs and variation orders, project reports, and the salaries an
 - **Downloading a PDF records nothing.** To mark an invoice or BOQ as sent by hand, record a `download` or `whatsapp` delivery (`POST …/deliveries`), as before.
 - **Emailing:**
   - `to` is any valid address. It is usually one of the client's contacts, but it doesn't have to be.
-  - `note` is kept with the delivery and isn't put in the email.
+  - `note` is kept with the delivery and isn't put in the email, except a receipt's, which the email shows.
   - The email is sent first. If it fails, nothing is recorded and the answer is `503 email_delivery_failed`.
   - A draft or voided invoice can't be emailed (`422 invoice_not_issued` / `invoice_voided`).
 - **Wording:** documents are in English only. They have no Arabic, since the company's invoices don't use it.
