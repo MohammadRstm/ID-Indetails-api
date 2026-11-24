@@ -31,6 +31,14 @@ public sealed class MessagesController(IMessagingService messagingService) : Con
     public Task<MessageReceiptsResponse> Receipts(long messageId, CancellationToken cancellationToken)
         => messagingService.ReceiptsAsync(messageId, cancellationToken);
 
+    /// <summary>Only the sender deletes, and only a voice message (<c>Business/Messaging/MessagingRules.CheckDelete</c>).</summary>
+    [HttpDelete("{messageId:long}")]
+    public async Task<IActionResult> Delete(long messageId, CancellationToken cancellationToken)
+    {
+        await messagingService.DeleteAsync(messageId, cancellationToken);
+        return NoContent();
+    }
+
     [HttpGet("contacts")]
     public Task<IReadOnlyList<ContactResponse>> Contacts(CancellationToken cancellationToken)
         => messagingService.ContactsAsync(cancellationToken);

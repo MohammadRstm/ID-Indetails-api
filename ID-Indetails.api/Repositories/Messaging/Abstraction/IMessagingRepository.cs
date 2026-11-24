@@ -91,6 +91,15 @@ public interface IMessagingRepository
 
     void Add(Message message);
 
+    /// <summary>The message with its attachments and their files, for deleting it. Tracked.</summary>
+    Task<Message?> MessageForDeleteAsync(long id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Removes the message (its mentions and attachments go with it). Read and received markers on it move back to the
+    /// chat's message before it, and its Announcements read times are dropped. Saved with the unit of work.
+    /// </summary>
+    Task RemoveAsync(Message message, CancellationToken cancellationToken = default);
+
     /// <summary>Up to <paramref name="limit"/> messages older than <paramref name="beforeId"/> (or the newest), newest first. Not tracked.</summary>
     Task<IReadOnlyList<MessageView>> MessagesAsync(long conversationId, long? beforeId, int limit, CancellationToken cancellationToken = default);
 

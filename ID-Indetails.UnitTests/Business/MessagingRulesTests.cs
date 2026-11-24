@@ -74,4 +74,20 @@ public class MessagingRulesTests
         denial.Code.ShouldBe(ErrorCodes.TooManyVoiceNotes);
         denial.Message.ShouldBe("A message can carry one voice note.");
     }
+
+    [Fact]
+    public void Only_the_sender_deletes_and_only_a_voice_message()
+    {
+        MessagingRules.CheckDelete(7, 7, MessageKinds.Text, ["audio/webm"]).ShouldBeNull();
+        MessagingRules.CheckDelete(7, 7, MessageKinds.Text, ["audio/ogg", "image/png"]).ShouldBeNull();
+
+        var someoneElse = MessagingRules.CheckDelete(7, 8, MessageKinds.Text, ["audio/webm"])!;
+        (someoneElse.Kind, someoneElse.Code).ShouldBe((DenialKind.Forbidden, ErrorCodes.Forbidden));
+        someoneElse.Message.ShouldBe("Only the person who sent a voice message can delete it.");
+
+        foreach (var (kind, types) in new (string Kind, string[] Types)[] { (MessageKinds.Text, []), (MessageKinds.Text, ["image/png"]), (MessageKinds.TaskComment, ["audio/webm"]) })
+        {
+            MessagingRules.CheckDelete(7, 7, kind, types)!.Code.ShouldBe(ErrorCodes.MessageNotDeletable);
+        }
+    }
 }

@@ -15,6 +15,7 @@ namespace ID_Indetails.api.Business.Messaging;
 /// other domain. Nobody messages themselves, and only active people receive messages.</item>
 /// <item>Mentions exist only in group chats, and only of the chat's members.</item>
 /// <item>A message carries at most one voice note (an audio file) among its attachments.</item>
+/// <item>Only a voice message can be deleted, and only by whoever sent it. Everything else said in a chat stays.</item>
 /// </list>
 /// Chats mirror the organisation, so they follow role and team rather than permissions.
 /// </summary>
@@ -48,6 +49,19 @@ public static class MessagingRules
         => attachmentTypes.Count(type => FileRules.KindOf(type) == FileKind.Audio) > 1
             ? RuleDenial.BusinessRule(ErrorCodes.TooManyVoiceNotes, "A message can carry one voice note.")
             : null;
+
+    /// <param name="attachmentTypes">The stored type (MIME) of each file attached to the message.</param>
+    public static RuleDenial? CheckDelete(long senderId, long callerId, string kind, IEnumerable<string> attachmentTypes)
+    {
+        if (senderId != callerId)
+        {
+            return RuleDenial.Forbidden(ErrorCodes.Forbidden, "Only the person who sent a voice message can delete it.");
+        }
+
+        return kind == MessageKinds.Text && attachmentTypes.Any(type => FileRules.KindOf(type) == FileKind.Audio)
+            ? null
+            : RuleDenial.BusinessRule(ErrorCodes.MessageNotDeletable, "Only voice messages can be deleted.");
+    }
 
     public static RuleDenial? CheckMentions(IReadOnlyCollection<long> mentionIds, IReadOnlySet<long>? memberIds)
     {

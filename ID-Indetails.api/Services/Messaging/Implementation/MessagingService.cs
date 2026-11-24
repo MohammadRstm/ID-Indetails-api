@@ -9,6 +9,7 @@ using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Common.Abstraction;
+using ID_Indetails.api.Repositories.Files.Abstraction;
 using ID_Indetails.api.Repositories.Messaging.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
@@ -26,7 +27,7 @@ namespace ID_Indetails.api.Services.Messaging.Implementation;
 /// Chats are addressed by team or by person, never by an internal id. A conversation row is created with its first
 /// message; Announcements, the one chat everyone reads, was created with the migration that added it. A team chat the
 /// caller isn't in, or a person they can't reach, reads as not found. Sending marks the chat read for the sender.
-/// Messages can't be edited or deleted. Their ticks and "Seen by" come from the read markers (<see cref="MessageReceipts"/>).
+/// Messages can't be edited, and only a voice message can be deleted, by its sender. Their ticks and "Seen by" come from the read markers (<see cref="MessageReceipts"/>).
 /// </summary>
 public sealed class MessagingService(
     ICurrentUser currentUser,
@@ -34,6 +35,8 @@ public sealed class MessagingService(
     IMessagingRepository messaging,
     IWorkEntryRepository entries,
     IFileClaims fileClaims,
+    IFileRepository files,
+    IFileStorage storage,
     IUnitOfWork unitOfWork,
     ILiveUpdates live,
     IPushQueue pushes,
@@ -143,6 +146,38 @@ public sealed class MessagingService(
             seen,
             standing.Where(s => s.State == MessageReceipts.State.Delivered).Select(s => Person(s.Person)).ToList(),
             standing.Where(s => s.State == MessageReceipts.State.NotReceived).Select(s => Person(s.Person)).ToList());
+    }
+
+    public async Task DeleteAsync(long messageId, CancellationToken cancellationToken = default)
+    {
+        var me = await ViewerAsync(cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var message = await messaging.MessageForDeleteAsync(messageId, cancellationToken);
+        var chat = message is null ? null : await ContextAsync(me, message.ConversationId, cancellationToken);
+        if (message is null || chat is null)
+        {
+            throw new NotFoundException(MessageNotFound);
+        }
+
+        var recordings = message.Attachments.Select(a => a.File).ToList();
+        MessagingRules.CheckDelete(message.SenderId, me.Id, message.Kind, recordings.Select(f => f.MimeType)).ThrowIfDenied();
+
+        await messaging.RemoveAsync(message, cancellationToken);
+        foreach (var file in recordings)
+        {
+            files.Remove(file);
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        // The rows are gone first: a stray file on disk is harmless, a row without its file isn't.
+        foreach (var file in recordings)
+        {
+            storage.Delete(file.StorageKey);
+        }
+
+        await ChatChangedAsync(me, chat, cancellationToken);
     }
 
     public async Task<int> UnreadCountForAsync(long userId, CancellationToken cancellationToken = default)
@@ -639,6 +674,28 @@ public sealed class MessagingService(
             e.Id, m.RefCommentId ?? 0, new ChatPersonResponse(e.UserId, e.UserName), e.ProjectId, e.ProjectTitle, e.Description, e.StartedAt,
             readable ? e.Minutes : null,
             readable && e.Attachment is not null ? FileMapper.ToResponse(e.Attachment) : null);
+    }
+
+    /// <summary>Everyone in the chat reloads it.</summary>
+    private async Task ChatChangedAsync(ChatPerson me, ChatContext chat, CancellationToken cancellationToken)
+    {
+        switch (chat.Type)
+        {
+            case ConversationType.Group:
+                TeamChanged(chat.Team!, (await MembersAsync(chat.Team!, cancellationToken)).Select(p => p.Id));
+                break;
+            case ConversationType.Dm:
+                live.ChatChanged(chat.Other!.Id, new LiveChat(null, me.Id));
+                live.ChatChanged(me.Id, new LiveChat(null, chat.Other.Id));
+                break;
+            default:
+                foreach (var person in await messaging.ActivePeopleAsync(cancellationToken))
+                {
+                    live.ChatChanged(person.Id, LiveChat.ForAnnouncements);
+                }
+
+                break;
+        }
     }
 
     private void TeamChanged(ChatTeam team, IEnumerable<long> memberIds)
