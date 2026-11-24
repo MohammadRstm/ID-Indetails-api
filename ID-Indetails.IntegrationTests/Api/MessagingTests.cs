@@ -188,6 +188,53 @@ public class MessagingTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task The_sender_deletes_a_voice_message_and_its_recording_for_everyone()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var engineering = (await _steps.CreateTeamAsync(superAdmin, DomainCodes.Design, "Engineering")).Id;
+        var data = (await _steps.CreateTeamAsync(superAdmin, DomainCodes.Design, "Data")).Id;
+        var engineer = await InTeamAsync(superAdmin, DomainCodes.Design, engineering);
+        var teammate = await InTeamAsync(superAdmin, DomainCodes.Design, engineering);
+        var analyst = await InTeamAsync(superAdmin, DomainCodes.Design, data);
+
+        // in a direct chat: messages left in a team chat would be unread for whoever later joins the team
+        var chat = $"direct/{teammate.User.Id}";
+        var hello = await SendAsync(chat, new { body = "Morning" }, engineer);
+        var recording = await FileTests.UploadVoiceNoteAsync(Client, engineer.AccessToken);
+        var voice = await SendAsync(chat, new { body = "", attachmentIds = new[] { recording.Id } }, engineer);
+        var key = await _steps.ScalarAsync<string>("SELECT storage_key FROM files WHERE id = @id", ("@id", recording.Id));
+        // the teammate has read up to the voice message, so their read marker stands on it
+        await OkAsync<MessagesBadgeResponse>(Client.PostJsonAsync($"/api/messages/direct/{engineer.User.Id}/read", new { }, teammate.AccessToken));
+
+        // only the sender deletes, only a voice message, and only in a chat they can read
+        await (await Client.DeleteAsync($"/api/messages/{voice.Id}", teammate.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.DeleteAsync($"/api/messages/{voice.Id}", analyst.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        await (await Client.DeleteAsync($"/api/messages/{hello.Id}", engineer.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.MessageNotDeletable);
+
+        (await Client.DeleteAsync($"/api/messages/{voice.Id}", engineer.AccessToken)).StatusCode.ShouldBe(System.Net.HttpStatusCode.NoContent);
+
+        // nothing is left: not the message, not its file, not the recording on disk
+        (await PageAsync(chat, engineer)).Items.Select(m => m.Id).ShouldBe([hello.Id]);
+        (await PageAsync($"direct/{engineer.User.Id}", teammate)).Items.Select(m => m.Id).ShouldBe([hello.Id]);
+        await (await Client.GetAsync($"/api/files/{recording.Id}", engineer.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        File.Exists(Path.Combine(api.FilesRoot, key)).ShouldBeFalse();
+        await (await Client.DeleteAsync($"/api/messages/{voice.Id}", engineer.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+
+        // the teammate's marker moved back to the message before, so the chat still reads as read and new messages count
+        (await BadgeAsync(teammate)).Unread.ShouldBe(0);
+        await SendAsync(chat, new { body = "Back" }, engineer);
+        (await BadgeAsync(teammate)).Unread.ShouldBe(1);
+
+        // an announcement read by others goes too, with the times they read it
+        var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var spoken = await FileTests.UploadVoiceNoteAsync(Client, superAdmin.AccessToken);
+        var news = await SendAsync("announcements", new { body = "", attachmentIds = new[] { spoken.Id } }, superAdmin);
+        await OkAsync<MessagesBadgeResponse>(Client.PostJsonAsync("/api/messages/announcements/read", new { }, designer.AccessToken));
+        (await Client.DeleteAsync($"/api/messages/{news.Id}", superAdmin.AccessToken)).StatusCode.ShouldBe(System.Net.HttpStatusCode.NoContent);
+        (await PageAsync("announcements", designer)).Items.ShouldNotContain(m => m.Id == news.Id);
+    }
+
+    [Fact]
     public async Task An_announcement_can_be_a_voice_note_everyone_plays()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

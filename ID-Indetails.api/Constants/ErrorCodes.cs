@@ -125,6 +125,7 @@ public static class ErrorCodes
     public const string NoTeamChat = "no_team_chat";
     public const string TeamHasChat = "team_has_chat";
     public const string TooManyVoiceNotes = "too_many_voice_notes";
+    public const string MessageNotDeletable = "message_not_deletable";
 
     // Files
     public const string FileTypeNotAllowed = "file_type_not_allowed";

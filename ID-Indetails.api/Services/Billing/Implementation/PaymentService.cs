@@ -10,6 +10,7 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Billing;
 using ID_Indetails.api.DTO.Response.Billing;
 using ID_Indetails.api.DTO.Response.Common;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
@@ -58,6 +59,25 @@ public sealed class PaymentService(
     {
         var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.FinancialView);
         return await DescribeAsync(actor, paymentId, cancellationToken);
+    }
+
+    public async Task<PaymentReceipt> ReceiptAsync(long paymentId, CancellationToken cancellationToken = default)
+    {
+        // the receipt shows the project's money, which only whoever sees it may read
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.PaymentRecord).Require(PermissionCodes.FinancialView);
+        var payment = await DescribeAsync(actor, paymentId, cancellationToken);
+        Throw(PaymentRules.CheckReceipt(payment.VoidedAt is not null));
+
+        var live = await payments.LiveOfProjectAsync(payment.Project.Id, cancellationToken);
+        return new PaymentReceipt(payment, PaymentRules.PaidUpTo(live, payment.Id, payment.ReceivedOn));
+    }
+
+    public async Task RecordReceiptSentAsync(long paymentId, CancellationToken cancellationToken = default)
+    {
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.PaymentRecord);
+        var (payment, domain) = await VisiblePaymentAsync(actor, paymentId, cancellationToken);
+        activity.Add(PaymentEvent(domain, payment, ActivityEventKinds.ReceiptSent, actor.UserId, new { channel = DeliveryChannel.Email }));
+        await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<PaymentResponse> RecordAsync(long projectId, RecordPaymentRequest request, CancellationToken cancellationToken = default)
@@ -270,6 +290,14 @@ public sealed class PaymentService(
         var project = await projects.GetAsync(payment.ProjectId, cancellationToken);
         return project is not null && actor.CanSee(project.DomainCode)
             ? (payment, project.DomainCode)
+            : throw new NotFoundException(NotFoundMessage);
+    }
+
+    private async Task<(Payment Payment, string Domain)> VisiblePaymentAsync(UserAccess actor, long paymentId, CancellationToken cancellationToken)
+    {
+        var payment = await payments.GetAsync(paymentId, cancellationToken);
+        return payment is not null && actor.CanSee(payment.Project.DomainCode)
+            ? (payment, payment.Project.DomainCode)
             : throw new NotFoundException(NotFoundMessage);
     }
 

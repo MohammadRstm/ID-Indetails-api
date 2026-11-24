@@ -218,6 +218,7 @@ public static class ProtonCoverage
         Action("Payments.Apply", "propose_payment_step", T2, ProtonFamily.Money),
         Action("Payments.Void", "propose_payment_step", T2, ProtonFamily.Money),
         Planned("Payments.SetLabel", T2, ProtonFamily.Money),
+        Planned("Payments.EmailReceipt", T2, ProtonFamily.Money, externalSend: true),
         // bank fields are never shown to Proton nor stored in a proposal
         Action("BillingSettings.Save", "propose_billing_settings", T2, ProtonFamily.Money),
         Action("BillingSettings.AddExchangeRate", "propose_exchange_rate", T2, ProtonFamily.Money),
@@ -302,6 +303,7 @@ public static class ProtonCoverage
         Action("Messages.MarkTeamRead", "propose_mark_chat_read"),
         Action("Messages.MarkAnnouncementsRead", "propose_mark_chat_read"),
         Action("Messages.SendAnnouncement", "propose_send_announcement", T2, ProtonFamily.Messaging),
+        Open("Messages.Delete", "it deletes a voice message for everyone and can't be undone: its sender does it from the message's menu, and Proton opens the chat"),
         Action("Notifications.MarkRead", "propose_mark_notifications_read"),
         Action("Notifications.MarkAllRead", "propose_mark_notifications_read"),
         Action("BugReports.Report", "propose_report_bug", T2, ProtonFamily.Messaging, externalSend: true),

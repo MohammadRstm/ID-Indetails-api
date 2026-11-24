@@ -1,3 +1,4 @@
+using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Data;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Billing.Abstraction;
@@ -78,6 +79,12 @@ public sealed class PaymentRepository(IdIndetailsDbContext db) : IPaymentReposit
             .FromSql($"SELECT * FROM `payments` WHERE `id` = {id} FOR UPDATE")
             .ToListAsync(cancellationToken))
             .SingleOrDefault();
+
+    public async Task<IReadOnlyList<PaymentRules.LivePayment>> LiveOfProjectAsync(long projectId, CancellationToken cancellationToken = default)
+        => await db.Payments.AsNoTracking()
+            .Where(p => p.ProjectId == projectId && p.VoidedAt == null)
+            .Select(p => new PaymentRules.LivePayment(p.Id, p.ReceivedOn, p.AmountUsd))
+            .ToListAsync(cancellationToken);
 
     public Task<bool> HasLiveInitialAsync(long projectId, CancellationToken cancellationToken = default)
         => db.Payments.AnyAsync(p => p.ProjectId == projectId && p.IsInitial && p.VoidedAt == null, cancellationToken);

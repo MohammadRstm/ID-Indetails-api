@@ -61,6 +61,15 @@ public sealed record ApplyPaymentRequest
     public long InvoiceId { get; init; }
 }
 
+/// <summary>Emails a payment's receipt to the client, with its PDF attached.</summary>
+public sealed record EmailReceiptRequest
+{
+    public string To { get; init; } = string.Empty;
+
+    /// <summary>The sender's own words to the client, shown in the email under its opening.</summary>
+    public string? Note { get; init; }
+}
+
 /// <summary>Files a payment under an account label, or clears it.</summary>
 public sealed record SetPaymentLabelRequest
 {

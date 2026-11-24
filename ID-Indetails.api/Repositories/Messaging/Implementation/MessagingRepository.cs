@@ -63,6 +63,24 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
 
     public void Add(Message message) => db.Messages.Add(message);
 
+    public Task<Message?> MessageForDeleteAsync(long id, CancellationToken cancellationToken = default)
+        => db.Messages.Include(m => m.Attachments).ThenInclude(a => a.File).SingleOrDefaultAsync(m => m.Id == id, cancellationToken);
+
+    public async Task RemoveAsync(Message message, CancellationToken cancellationToken = default)
+    {
+        var previous = await db.Messages
+            .Where(m => m.ConversationId == message.ConversationId && m.Id < message.Id)
+            .MaxAsync(m => (long?)m.Id, cancellationToken);
+        await db.ConversationReads
+            .Where(r => r.ConversationId == message.ConversationId && r.LastReadMessageId == message.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.LastReadMessageId, previous), cancellationToken);
+        await db.ConversationReads
+            .Where(r => r.ConversationId == message.ConversationId && r.LastDeliveredMessageId == message.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.LastDeliveredMessageId, previous), cancellationToken);
+        await db.MessageReads.Where(r => r.MessageId == message.Id).ExecuteDeleteAsync(cancellationToken);
+        db.Messages.Remove(message);
+    }
+
     public Task<IReadOnlyList<MessageView>> MessagesAsync(long conversationId, long? beforeId, int limit, CancellationToken cancellationToken = default)
     {
         var query = db.Messages.Where(m => m.ConversationId == conversationId);

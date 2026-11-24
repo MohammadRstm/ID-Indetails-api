@@ -1,3 +1,4 @@
+using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Models;
 
 namespace ID_Indetails.api.Repositories.Billing.Abstraction;
@@ -24,6 +25,9 @@ public interface IPaymentRepository
 
     /// <summary>Tracked, and locked (<c>SELECT … FOR UPDATE</c>) until the transaction ends.</summary>
     Task<Payment?> GetForUpdateAsync(long id, CancellationToken cancellationToken = default);
+
+    /// <summary>The project's payments that aren't void. Not tracked.</summary>
+    Task<IReadOnlyList<PaymentRules.LivePayment>> LiveOfProjectAsync(long projectId, CancellationToken cancellationToken = default);
 
     Task<bool> HasLiveInitialAsync(long projectId, CancellationToken cancellationToken = default);
 

@@ -5,8 +5,17 @@ using ID_Indetails.api.Models;
 
 namespace ID_Indetails.api.Services.Billing.Abstraction;
 
+/// <summary>A live payment, and what the client had paid by it, it included (USD).</summary>
+public sealed record PaymentReceipt(PaymentResponse Payment, decimal PaidSoFar);
+
 public interface IPaymentService
 {
+    /// <summary>What a payment's receipt shows (<c>payment:record</c>). A voided payment has none.</summary>
+    Task<PaymentReceipt> ReceiptAsync(long paymentId, CancellationToken cancellationToken = default);
+
+    /// <summary>Notes in the project's activity that the payment's receipt was emailed to the client.</summary>
+    Task RecordReceiptSentAsync(long paymentId, CancellationToken cancellationToken = default);
+
     Task<PagedResponse<PaymentResponse>> ListAsync(PaymentListQuery query, CancellationToken cancellationToken = default);
 
     Task<PaymentResponse> GetAsync(long paymentId, CancellationToken cancellationToken = default);

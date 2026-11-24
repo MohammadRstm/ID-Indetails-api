@@ -111,6 +111,8 @@ In a domain whose billing settings turn them on, the hourly run emails clients r
 | `PUT /api/payments/{id}/invoice` | `payment:record` | `{ invoiceId }` applies a payment on account to an issued invoice |
 | `PUT /api/payments/{id}/label` | `payment:record` and `financial:view` (it answers with the whole payment) | `{ accountLabelId }` files a live payment under an account label, changes it, or clears it (`null` or left out) |
 | `POST /api/payments/{id}/void` | `payment:void` | `{ reason }` |
+| `GET /api/payments/{id}/receipt` | `payment:record` and `financial:view` | The payment's receipt as a PDF ([below](#receipts)) |
+| `POST /api/payments/{id}/receipt/email` | `payment:record` and `financial:view` | `{ to, note }`: emails the receipt with its PDF attached (`204`) |
 
 Rules (`Business/Billing/PaymentRules.cs`):
 
@@ -127,7 +129,17 @@ Rules (`Business/Billing/PaymentRules.cs`):
   - The label must exist (`400 validation_failed` naming `accountLabelId`; a zero or negative id too), and an archived label can't be newly picked (`422 account_label_archived`). A payment keeps an archived label it already has, and can drop it, but cannot get it back once cleared.
   - Setting the label a payment already has changes nothing and writes no event. A voided payment can't be relabelled (`422 payment_already_voided`). It follows the payment's domain: a payment of a domain the caller can't see reads as `404`.
   - The label decides the row a payment is counted in on an Execution site's [account figures](execution.md#account-figures). It changes no amount, TVA share, invoice or profit, so there is no profit floor.
-- Events: `payment_recorded`, `payment_applied`, `payment_voided`, `payment_label_set` (the label's name and the previous one, `null` for none, in the payload). The USD value is in the `amount` column. The payload has only the invoice number, currency, method, initial flag, label names or reason, never the amount.
+- Events: `payment_recorded`, `payment_applied`, `payment_voided`, `payment_label_set` (the label's name and the previous one, `null` for none, in the payload), `receipt_sent` (`channel: email`). The USD value is in the `amount` column. The payload has only the invoice number, currency, method, initial flag, label names or reason, never the amount.
+
+### Receipts
+
+Added 24 November 2026: a receipt tells the client that a payment was received, in both businesses. Whoever records payments (`payment:record`, which comes with `financial:view`) downloads it or emails it, and the app offers it as soon as a payment is recorded, and from the payment's menu afterwards.
+
+- **What it shows** (`ReceiptPdf`, laid out as the invoice is): the client, the project, the day received, how it was paid and its reference, the invoice it paid if any, and the amount in its own currency, with what it came to in dollars when that isn't USD. Then **Your project**: the project's total (TVA included), what had been paid by this payment, it included, and what is still to pay, or what was paid ahead. While an Execution site has no agreed BOQ (a total of 0), only what was paid shows. Never the payment's internal note, its account label, costs or profit.
+- **Paid so far** counts the project's live payments received before this one's day, and those received on its day and recorded no later (`PaymentRules.PaidUpTo`), so a receipt made again later still says what was paid by then. The total and what is still to pay use the project's price today.
+- **Number.** A receipt is numbered after its payment (`R-31`), and the file is `receipt-r-31.pdf`.
+- **Email.** `to` is any valid address. The email thanks the client, says the payment was received, shows the payment and where the project stands, and puts the sender's `note` (up to 1,000 characters) under its opening, signed by the sender. It is sent first: if it fails, nothing is noted (`503 email_delivery_failed`). Once sent, `receipt_sent` is added to the project's activity. Downloading records nothing.
+- A voided payment has no receipt (`422 payment_already_voided`). A payment of a business the caller can't see reads as `404`.
 
 ## A project's cash position
 

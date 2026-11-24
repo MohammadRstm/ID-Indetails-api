@@ -31,6 +31,12 @@ public interface IDocumentService
     /// <summary>A scheduled invoice on its day, signed by whoever scheduled it. Records nothing: the scheduled sending does.</summary>
     Task EmailScheduledInvoiceAsync(InvoiceResponse invoice, string to, CancellationToken cancellationToken = default);
 
+    /// <summary>A live payment's receipt (<c>payment:record</c>): the payment, and where the project stands by it.</summary>
+    Task<PdfFile> ReceiptPdfAsync(long paymentId, CancellationToken cancellationToken = default);
+
+    /// <summary>Emails a payment's receipt with its PDF and notes it in the project's activity. Nothing is noted if sending fails.</summary>
+    Task EmailReceiptAsync(long paymentId, EmailReceiptRequest request, CancellationToken cancellationToken = default);
+
     /// <summary>A client BOQ or VO; an internal draft has none.</summary>
     Task<PdfFile> BoqPdfAsync(long boqId, CancellationToken cancellationToken = default);
 
