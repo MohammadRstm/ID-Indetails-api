@@ -2,6 +2,7 @@ using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Messaging;
 using ID_Indetails.api.Constants;
+using ID_Indetails.api.DTO.Request.Files;
 using ID_Indetails.api.DTO.Request.Messaging;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Messaging;
@@ -47,20 +48,32 @@ public sealed class MessagingService(
     private const string PersonNotFound = "Person not found.";
     private const string MessageNotFound = "Message not found.";
 
-    /// <summary>The caller's team chats, the states of the conversations they may still read, and the people in their direct chats.</summary>
-    private sealed record Inbox(IReadOnlyList<ChatTeam> Teams, IReadOnlyList<ConversationState> States, IReadOnlyDictionary<long, ChatPerson> People);
+    /// <summary>
+    /// The caller's team chats and custom groups, the states of the conversations they may still read, and the people
+    /// in their direct chats.
+    /// </summary>
+    private sealed record Inbox(
+        IReadOnlyList<ChatTeam> Teams,
+        IReadOnlyList<ChatGroup> Groups,
+        IReadOnlyList<ConversationState> States,
+        IReadOnlyDictionary<long, ChatPerson> People);
 
-    /// <summary>A conversation the caller may read: a team's chat (with the team), a direct chat (with the other person), or Announcements.</summary>
-    private sealed record ChatContext(long ConversationId, ConversationType Type, ChatTeam? Team, ChatPerson? Other);
+    /// <summary>
+    /// A conversation the caller may read: a team's chat (with the team), a direct chat (with the other person),
+    /// Announcements, or a custom group they are in (with the group).
+    /// </summary>
+    private sealed record ChatContext(long ConversationId, ConversationType Type, ChatTeam? Team, ChatPerson? Other, ChatGroup? Group = null);
 
     public async Task<IReadOnlyList<ConversationResponse>> ConversationsAsync(CancellationToken cancellationToken = default)
     {
         var me = await ViewerAsync(cancellationToken);
-        var (teams, states, people) = await InboxAsync(me, cancellationToken);
+        var (teams, groups, states, people) = await InboxAsync(me, cancellationToken);
         var active = await messaging.ActivePeopleAsync(cancellationToken);
         var teamById = teams.ToDictionary(t => t.Id);
+        var groupById = groups.ToDictionary(g => g.Id);
         var chats = states.ToDictionary(s => s.Id, s => new ChatContext(
-            s.Id, s.Type, s.TeamId is { } teamId ? teamById.GetValueOrDefault(teamId) : null, s.OtherUserId is { } other ? people.GetValueOrDefault(other) : null));
+            s.Id, s.Type, s.TeamId is { } teamId ? teamById.GetValueOrDefault(teamId) : null, s.OtherUserId is { } other ? people.GetValueOrDefault(other) : null,
+            groupById.GetValueOrDefault(s.Id)));
         var lastIds = states.Where(s => s.LastMessageId is not null).Select(s => s.LastMessageId!.Value).ToList();
         var lastViews = await messaging.MessagesByIdAsync(lastIds, cancellationToken);
         var receipts = await ReceiptsAsync(me, lastViews.Select(m => (chats[m.ConversationId], m)).ToList(), active, cancellationToken);
@@ -76,6 +89,16 @@ public sealed class MessagingService(
                 ConversationType.Group, new ChatTeamResponse(t.Id, t.Name, t.Domain), null, LastOf(state), state?.Unread ?? 0, state?.UnreadMention ?? false,
                 online);
         });
+        var byId = states.ToDictionary(s => s.Id);
+        var groupChats = groups.Select(g =>
+        {
+            var state = byId.GetValueOrDefault(g.Id);
+            var members = active.Where(p => g.MemberIds.Contains(p.Id)).ToList();
+            var online = members.Count(p => p.Id != me.Id && presence.IsOnline(p.Id));
+            return new ConversationResponse(
+                ConversationType.CustomGroup, null, null, LastOf(state), state?.Unread ?? 0, state?.UnreadMention ?? false, online,
+                ToGroup(g, members.Count));
+        });
         var directChats = states
             .Where(s => s.OtherUserId is { } other && people.ContainsKey(other))
             .Select(s => new ConversationResponse(
@@ -85,9 +108,9 @@ public sealed class MessagingService(
         // Announcements stays first, even before anyone wrote in it
         return [
             new ConversationResponse(ConversationType.Announcements, null, null, LastOf(announcements), announcements?.Unread ?? 0, false),
-            .. teamChats.Concat(directChats)
+            .. teamChats.Concat(groupChats).Concat(directChats)
                 .OrderByDescending(c => c.LastMessage?.CreatedAt ?? DateTime.MinValue)
-                .ThenBy(c => c.Team?.Name ?? c.Person?.Name),
+                .ThenBy(c => c.Team?.Name ?? c.Group?.Name ?? c.Person?.Name),
         ];
     }
 
@@ -330,6 +353,209 @@ public sealed class MessagingService(
         return await BadgeAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<ContactResponse>> GroupMembersAsync(long groupId, CancellationToken cancellationToken = default)
+    {
+        var me = await ViewerAsync(cancellationToken);
+        var group = await GroupChatAsync(me, groupId, cancellationToken);
+        return (await GroupMembersOfAsync(group, cancellationToken)).Select(ToContact).ToList();
+    }
+
+    public async Task<MessagePageResponse> GroupMessagesAsync(long groupId, MessagePageQuery query, CancellationToken cancellationToken = default)
+    {
+        var me = await ViewerAsync(cancellationToken);
+        var group = await GroupChatAsync(me, groupId, cancellationToken);
+        return await PageAsync(me, GroupContext(group), query, cancellationToken);
+    }
+
+    public Task<MessageResponse> SendToGroupAsync(long groupId, SendMessageRequest request, CancellationToken cancellationToken = default)
+        => SendToGroupAsync(groupId, request, null, cancellationToken);
+
+    public async Task<MessageResponse> SendToGroupAsync(long groupId, SendMessageRequest request, long? protonActionId, CancellationToken cancellationToken)
+    {
+        var me = await ViewerAsync(cancellationToken);
+        var group = await GroupChatAsync(me, groupId, cancellationToken);
+        var mentionIds = request.MentionIds.Distinct().ToList();
+        var memberIds = (await GroupMembersOfAsync(group, cancellationToken)).Select(p => p.Id).ToHashSet();
+        MessagingRules.CheckMentions(mentionIds, memberIds).ThrowIfDenied();
+
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        // locked, so the group can't be deleted or the sender taken out while the message is saved
+        var conversation = await messaging.GroupForUpdateAsync(group.Id, cancellationToken);
+        if (conversation is null || conversation.Members.All(m => m.UserId != me.Id))
+        {
+            throw new NotFoundException(ChatNotFound);
+        }
+
+        var message = await PostAsync(
+            conversation, me.Id, request.Body, MessageKinds.Text, mentionIds, request.AttachmentIds, null, null, cancellationToken, protonActionId);
+        await transaction.CommitAsync(cancellationToken);
+        GroupChanged(group.Id, memberIds);
+        pushes.Message(message.Id, null, memberIds.Where(id => id != me.Id), mentionIds, groupId: group.Id);
+
+        return await OneAsync(me, GroupContext(group), message.Id, cancellationToken);
+    }
+
+    public async Task<MessagesBadgeResponse> MarkGroupReadAsync(long groupId, CancellationToken cancellationToken = default)
+    {
+        var me = await ViewerAsync(cancellationToken);
+        var group = await GroupChatAsync(me, groupId, cancellationToken);
+        await MarkReadAsync(me, await messaging.ConversationAsync(group.Id, cancellationToken), cancellationToken);
+        live.ChatChanged(me.Id, GroupLive(group.Id));
+        return await BadgeAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ChatGroupDetailResponse>> GroupsAsync(CancellationToken cancellationToken = default)
+    {
+        var me = await ViewerAsync(cancellationToken);
+        var active = await messaging.ActivePeopleAsync(cancellationToken);
+        return (await messaging.GroupsAsync(cancellationToken)).Select(g => Detail(me, g, active)).ToList();
+    }
+
+    public async Task<IReadOnlyList<ContactResponse>> GroupCandidatesAsync(CancellationToken cancellationToken = default)
+    {
+        await ViewerAsync(cancellationToken);
+        return (await messaging.ActivePeopleAsync(cancellationToken)).Select(ToContact).ToList();
+    }
+
+    public async Task<ChatGroupDetailResponse> CreateGroupAsync(CreateChatGroupRequest request, CancellationToken cancellationToken = default)
+    {
+        var me = await ViewerAsync(cancellationToken);
+        var name = request.Name.Trim();
+        // whoever creates it is in it, and can leave like anyone else
+        var memberIds = request.MemberIds.Append(me.Id).Distinct().ToList();
+        await CheckNewMembersAsync(memberIds, memberIds.Count, cancellationToken);
+
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var now = clock.UtcNow;
+        var group = new Conversation
+        {
+            Type = ConversationType.CustomGroup,
+            Name = name,
+            CreatedAt = now,
+            Members = memberIds.Select(id => new ConversationMember { UserId = id, AddedAt = now }).ToList(),
+        };
+        messaging.Add(group);
+        await PostEventAsync(group, me.Id, GroupEvents.Created(name), cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        GroupChanged(group.Id, memberIds);
+
+        return await DetailAsync(me, group.Id, cancellationToken);
+    }
+
+    public async Task<ChatGroupDetailResponse> RenameGroupAsync(long groupId, RenameChatGroupRequest request, CancellationToken cancellationToken = default)
+    {
+        var me = await ViewerAsync(cancellationToken);
+        var name = request.Name.Trim();
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var group = await ManagedGroupAsync(groupId, cancellationToken);
+        if (group.Name != name)
+        {
+            group.Name = name;
+            await PostEventAsync(group, me.Id, GroupEvents.Renamed(name), cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        GroupChanged(group.Id, MemberIdsOf(group).Append(me.Id));
+        return await DetailAsync(me, group.Id, cancellationToken);
+    }
+
+    public async Task<ChatGroupDetailResponse> AddGroupMembersAsync(long groupId, AddChatGroupMembersRequest request, CancellationToken cancellationToken = default)
+    {
+        var me = await ViewerAsync(cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var group = await ManagedGroupAsync(groupId, cancellationToken);
+        var current = MemberIdsOf(group).ToHashSet();
+        var added = request.UserIds.Distinct().Where(id => !current.Contains(id)).ToList();
+        var people = await CheckNewMembersAsync(request.UserIds, current.Count + added.Count, cancellationToken);
+        if (added.Count > 0)
+        {
+            var now = clock.UtcNow;
+            foreach (var id in added)
+            {
+                group.Members.Add(new ConversationMember { UserId = id, AddedAt = now });
+            }
+
+            var line = await PostEventAsync(group, me.Id, GroupEvents.Added(people.Where(p => added.Contains(p.Id)).Select(p => p.Name).ToList()), cancellationToken);
+            // they see the group's whole history, but what came before they joined isn't theirs to catch up on
+            foreach (var id in added)
+            {
+                await messaging.MoveReadMarkerAsync(id, group.Id, line.Id, now, cancellationToken);
+            }
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        GroupChanged(group.Id, current.Concat(added).Append(me.Id));
+        return await DetailAsync(me, group.Id, cancellationToken);
+    }
+
+    public async Task<ChatGroupDetailResponse> RemoveGroupMemberAsync(long groupId, long userId, CancellationToken cancellationToken = default)
+    {
+        var me = await ViewerAsync(cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var group = await ManagedGroupAsync(groupId, cancellationToken);
+        var before = MemberIdsOf(group).ToList();
+        var member = group.Members.SingleOrDefault(m => m.UserId == userId) ?? throw new NotFoundException(PersonNotFound);
+        var person = (await messaging.PeopleAsync([userId], cancellationToken)).Single();
+        group.Members.Remove(member);
+        await PostEventAsync(group, me.Id, userId == me.Id ? GroupEvents.Left : GroupEvents.Removed(person.Name), cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        // the person taken out reloads too: the chat is gone for them, history included
+        GroupChanged(group.Id, before.Append(me.Id));
+        return await DetailAsync(me, group.Id, cancellationToken);
+    }
+
+    public async Task LeaveGroupAsync(long groupId, CancellationToken cancellationToken = default)
+    {
+        var me = await ViewerAsync(cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var group = await messaging.GroupForUpdateAsync(groupId, cancellationToken) ?? throw new NotFoundException(ChatNotFound);
+        var member = group.Members.SingleOrDefault(m => m.UserId == me.Id) ?? throw new NotFoundException(ChatNotFound);
+        var before = MemberIdsOf(group).ToList();
+        group.Members.Remove(member);
+        await PostEventAsync(group, me.Id, GroupEvents.Left, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        GroupChanged(group.Id, before);
+    }
+
+    public Task<ChatGroupDetailResponse> SetGroupPhotoAsync(long groupId, AttachFileRequest request, CancellationToken cancellationToken = default)
+        => ChangeGroupPhotoAsync(groupId, request.FileId, cancellationToken);
+
+    public Task<ChatGroupDetailResponse> RemoveGroupPhotoAsync(long groupId, CancellationToken cancellationToken = default)
+        => ChangeGroupPhotoAsync(groupId, null, cancellationToken);
+
+    public async Task DeleteGroupAsync(long groupId, CancellationToken cancellationToken = default)
+    {
+        var me = await ViewerAsync(cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var group = await ManagedGroupAsync(groupId, cancellationToken);
+        var memberIds = MemberIdsOf(group).ToList();
+        var stored = await messaging.GroupFilesAsync(group.Id, cancellationToken);
+        await messaging.RemoveGroupAsync(group, cancellationToken);
+        foreach (var file in stored)
+        {
+            files.Remove(file);
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        // The rows are gone first: a stray file on disk is harmless, a row without its file isn't.
+        foreach (var file in stored)
+        {
+            storage.Delete(file.StorageKey);
+        }
+
+        GroupChanged(group.Id, memberIds.Append(me.Id));
+    }
+
+    public async Task<bool> CanSeeGroupPhotoAsync(long groupId, CancellationToken cancellationToken = default)
+    {
+        var me = await ViewerAsync(cancellationToken);
+        var group = await messaging.GroupAsync(groupId, cancellationToken);
+        return group is not null
+            && (group.MemberIds.Contains(me.Id) || (await permissions.GetAccessAsync(me.Id, cancellationToken)).Has(PermissionCodes.MessageManageGroups));
+    }
+
     public async Task<bool> CanReadConversationAsync(long conversationId, CancellationToken cancellationToken = default)
         => await ContextAsync(await ViewerAsync(cancellationToken), conversationId, cancellationToken) is not null;
 
@@ -375,13 +601,22 @@ public sealed class MessagingService(
         return me is { Status: UserStatus.Active } ? me : throw new ForbiddenException(ErrorCodes.Forbidden, "You don't have permission to do this.");
     }
 
-    /// <summary>The conversation, if the caller may read it now: Announcements, a team chat they are in, or their direct chat with someone they can reach.</summary>
+    /// <summary>
+    /// The conversation, if the caller may read it now: Announcements, a team chat or custom group they are in, or their
+    /// direct chat with someone they can reach.
+    /// </summary>
     private async Task<ChatContext?> ContextAsync(ChatPerson me, long conversationId, CancellationToken cancellationToken)
     {
         var conversation = await messaging.ConversationAsync(conversationId, cancellationToken);
         if (conversation?.Type == ConversationType.Announcements)
         {
             return new ChatContext(conversation.Id, ConversationType.Announcements, null, null);
+        }
+
+        if (conversation?.Type == ConversationType.CustomGroup)
+        {
+            var group = await messaging.GroupAsync(conversation.Id, cancellationToken);
+            return group is not null && group.MemberIds.Contains(me.Id) ? GroupContext(group) : null;
         }
 
         if (conversation?.TeamId is { } teamId)
@@ -415,17 +650,78 @@ public sealed class MessagingService(
     private async Task<IReadOnlyList<ChatPerson>> MembersAsync(ChatTeam team, CancellationToken cancellationToken)
         => (await messaging.ActivePeopleAsync(cancellationToken)).Where(p => MessagingRules.IsMember(Rule(p), Chat(team))).ToList();
 
+    /// <summary>A custom group the caller is in; any other reads as not found, as for team chats.</summary>
+    private async Task<ChatGroup> GroupChatAsync(ChatPerson me, long groupId, CancellationToken cancellationToken)
+    {
+        var group = await messaging.GroupAsync(groupId, cancellationToken);
+        return group is not null && group.MemberIds.Contains(me.Id) ? group : throw new NotFoundException(ChatNotFound);
+    }
+
+    /// <summary>Its active members: someone deactivated stays in the group but takes no part until they are back.</summary>
+    private async Task<IReadOnlyList<ChatPerson>> GroupMembersOfAsync(ChatGroup group, CancellationToken cancellationToken)
+        => (await messaging.ActivePeopleAsync(cancellationToken)).Where(p => group.MemberIds.Contains(p.Id)).ToList();
+
+    /// <summary>For changing a custom group (<c>message:manage_groups</c>, checked by the endpoint): locked, with its members.</summary>
+    private async Task<Conversation> ManagedGroupAsync(long groupId, CancellationToken cancellationToken)
+        => await messaging.GroupForUpdateAsync(groupId, cancellationToken) ?? throw new NotFoundException("Group not found.");
+
+    private static IEnumerable<long> MemberIdsOf(Conversation group) => group.Members.Select(m => m.UserId);
+
+    /// <summary>Everyone to put in a group is active staff, and the group stays within its size. Returns them, by name.</summary>
+    private async Task<IReadOnlyList<ChatPerson>> CheckNewMembersAsync(IReadOnlyCollection<long> userIds, int groupSize, CancellationToken cancellationToken)
+    {
+        var people = await messaging.PeopleAsync(userIds, cancellationToken);
+        MessagingRules.CheckGroupMembers(userIds, people.Select(Rule).ToList()).ThrowIfDenied();
+        MessagingRules.CheckGroupSize(groupSize).ThrowIfDenied();
+        return people;
+    }
+
+    /// <summary>A grey line saying what changed in the group, from whoever changed it (<see cref="GroupEvents"/>).</summary>
+    private Task<Message> PostEventAsync(Conversation group, long actorId, string words, CancellationToken cancellationToken)
+        => PostAsync(group, actorId, words, MessageKinds.GroupEvent, [], [], null, null, cancellationToken);
+
+    private async Task<ChatGroupDetailResponse> ChangeGroupPhotoAsync(long groupId, long? fileId, CancellationToken cancellationToken)
+    {
+        var me = await ViewerAsync(cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var group = await ManagedGroupAsync(groupId, cancellationToken);
+        if (group.PhotoFileId != fileId)
+        {
+            // the photo it replaces is attached to nothing any more, so the cleanup deletes it
+            group.PhotoFileId = fileId is { } id ? (await fileClaims.ClaimAsync(id, FileKind.Image, cancellationToken)).Id : null;
+            await PostEventAsync(group, me.Id, fileId is null ? GroupEvents.PhotoRemoved : GroupEvents.PhotoChanged, cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        GroupChanged(group.Id, MemberIdsOf(group).Append(me.Id));
+        return await DetailAsync(me, group.Id, cancellationToken);
+    }
+
+    private async Task<ChatGroupDetailResponse> DetailAsync(ChatPerson me, long groupId, CancellationToken cancellationToken)
+    {
+        var group = await messaging.GroupAsync(groupId, cancellationToken) ?? throw new NotFoundException("Group not found.");
+        return Detail(me, group, await messaging.ActivePeopleAsync(cancellationToken));
+    }
+
+    private ChatGroupDetailResponse Detail(ChatPerson me, ChatGroup group, IReadOnlyList<ChatPerson> active)
+        => new(
+            group.Id, group.Name, group.PhotoFileId,
+            active.Where(p => group.MemberIds.Contains(p.Id)).Select(ToContact).ToList(),
+            group.MemberIds.Contains(me.Id),
+            group.CreatedAt);
+
     /// <summary>Only chats the caller is still in, and people they can still reach.</summary>
     private async Task<Inbox> InboxAsync(ChatPerson me, CancellationToken cancellationToken)
     {
         var teams = await VisibleTeamsAsync(me, cancellationToken);
+        var groups = await messaging.GroupsOfAsync(me.Id, cancellationToken);
         var states = await messaging.StatesAsync(me.Id, teams.Select(t => t.Id).ToList(), cancellationToken);
         var others = states.Where(s => s.OtherUserId is not null).Select(s => s.OtherUserId!.Value).ToList();
         var people = (await messaging.PeopleAsync(others, cancellationToken))
             .Where(p => MessagingRules.CanReach(Rule(me), Rule(p)))
             .ToDictionary(p => p.Id);
 
-        return new Inbox(teams, states.Where(s => s.OtherUserId is null || people.ContainsKey(s.OtherUserId.Value)).ToList(), people);
+        return new Inbox(teams, groups, states.Where(s => s.OtherUserId is null || people.ContainsKey(s.OtherUserId.Value)).ToList(), people);
     }
 
     /// <summary>What the inbox shows unread: in chats the caller is still in, and with people they can still reach.</summary>
@@ -524,7 +820,7 @@ public sealed class MessagingService(
 
     /// <summary>
     /// The caller received or read the messages after <paramref name="from"/> up to <paramref name="to"/>: their senders
-    /// see the new ticks, and in team chats and Announcements so do the super admins.
+    /// see the new ticks, and in team chats and Announcements so do the super admins, in custom groups those in it.
     /// </summary>
     private async Task ReceiptsMovedAsync(
         ChatPerson me,
@@ -538,7 +834,14 @@ public sealed class MessagingService(
         var told = (await messaging.SendersBetweenAsync(conversationId, from, to, me.Id, cancellationToken)).ToHashSet();
         if (type != ConversationType.Dm)
         {
-            told.UnionWith((await messaging.ActivePeopleAsync(cancellationToken)).Where(p => p.Role == RoleCodes.SuperAdmin && p.Id != me.Id).Select(p => p.Id));
+            var superAdmins = (await messaging.ActivePeopleAsync(cancellationToken)).Where(p => p.Role == RoleCodes.SuperAdmin && p.Id != me.Id).Select(p => p.Id);
+            if (type == ConversationType.CustomGroup)
+            {
+                var memberIds = (await messaging.GroupAsync(conversationId, cancellationToken))?.MemberIds ?? [];
+                superAdmins = superAdmins.Where(memberIds.Contains);
+            }
+
+            told.UnionWith(superAdmins);
         }
 
         if (told.Count == 0)
@@ -549,6 +852,7 @@ public sealed class MessagingService(
         live.ReceiptsChanged(told, type switch
         {
             ConversationType.Group => new LiveChat(teamId, null),
+            ConversationType.CustomGroup => GroupLive(conversationId),
             ConversationType.Announcements => LiveChat.ForAnnouncements,
             _ => new LiveChat(null, me.Id),
         });
@@ -583,8 +887,10 @@ public sealed class MessagingService(
     {
         var announces = items.Any(i => i.Chat.Type == ConversationType.Announcements && i.Message.Sender.Id != me.Id)
             && (await permissions.GetAccessAsync(me.Id, cancellationToken)).Has(PermissionCodes.MessageAnnounce);
+        // a custom group's grey lines have no ticks
         var shown = items
-            .Where(i => MessageReceipts.CanSee(i.Chat.Type, me.Id, me.Role == RoleCodes.SuperAdmin, announces, i.Message.Sender.Id))
+            .Where(i => i.Message.Kind != MessageKinds.GroupEvent
+                && MessageReceipts.CanSee(i.Chat.Type, me.Id, me.Role == RoleCodes.SuperAdmin, announces, i.Message.Sender.Id))
             .ToList();
         if (shown.Count == 0)
         {
@@ -619,6 +925,7 @@ public sealed class MessagingService(
         {
             ConversationType.Dm => chat.Other is { } other ? [other] : [],
             ConversationType.Group => chat.Team is { } team ? active.Where(p => MessagingRules.IsMember(Rule(p), Chat(team))) : [],
+            ConversationType.CustomGroup => chat.Group is { } group ? active.Where(p => group.MemberIds.Contains(p.Id)) : [],
             _ => active,
         };
 
@@ -688,6 +995,9 @@ public sealed class MessagingService(
                 live.ChatChanged(chat.Other!.Id, new LiveChat(null, me.Id));
                 live.ChatChanged(me.Id, new LiveChat(null, chat.Other.Id));
                 break;
+            case ConversationType.CustomGroup:
+                GroupChanged(chat.ConversationId, chat.Group!.MemberIds);
+                break;
             default:
                 foreach (var person in await messaging.ActivePeopleAsync(cancellationToken))
                 {
@@ -705,6 +1015,20 @@ public sealed class MessagingService(
             live.ChatChanged(id, new LiveChat(team.Id, null));
         }
     }
+
+    private void GroupChanged(long groupId, IEnumerable<long> userIds)
+    {
+        foreach (var id in userIds)
+        {
+            live.ChatChanged(id, GroupLive(groupId));
+        }
+    }
+
+    private static LiveChat GroupLive(long groupId) => new(null, null, GroupId: groupId);
+
+    private static ChatContext GroupContext(ChatGroup group) => new(group.Id, ConversationType.CustomGroup, null, null, group);
+
+    private static ChatGroupResponse ToGroup(ChatGroup group, int memberCount) => new(group.Id, group.Name, group.PhotoFileId, memberCount);
 
     private static MessagingRules.Person Rule(ChatPerson p) => new(p.Id, p.Role, p.Domain, p.TeamId, p.Status);
 

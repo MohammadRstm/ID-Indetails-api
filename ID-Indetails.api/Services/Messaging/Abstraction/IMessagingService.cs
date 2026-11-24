@@ -1,9 +1,10 @@
+using ID_Indetails.api.DTO.Request.Files;
 using ID_Indetails.api.DTO.Request.Messaging;
 using ID_Indetails.api.DTO.Response.Messaging;
 
 namespace ID_Indetails.api.Services.Messaging.Abstraction;
 
-/// <summary>Team chats, direct messages and Announcements (see <c>Business/Messaging/MessagingRules</c>).</summary>
+/// <summary>Team chats, direct messages, Announcements and custom groups (see <c>Business/Messaging/MessagingRules</c>).</summary>
 public interface IMessagingService
 {
     /// <summary>Announcements first, then every team chat the caller is in and their direct chats with messages, most recent first.</summary>
@@ -69,9 +70,55 @@ public interface IMessagingService
     /// <inheritdoc cref="MarkTeamReadAsync"/>
     Task<MessagesBadgeResponse> MarkAnnouncementsReadAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>A custom group's active members, for its members (mentions, the member list).</summary>
+    Task<IReadOnlyList<ContactResponse>> GroupMembersAsync(long groupId, CancellationToken cancellationToken = default);
+
+    /// <summary>A page of a custom group the caller is in; any other reads as not found.</summary>
+    Task<MessagePageResponse> GroupMessagesAsync(long groupId, MessagePageQuery query, CancellationToken cancellationToken = default);
+
+    Task<MessageResponse> SendToGroupAsync(long groupId, SendMessageRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>The same, sent by a confirmed Proton action: the message says it came through Proton.</summary>
+    Task<MessageResponse> SendToGroupAsync(long groupId, SendMessageRequest request, long? protonActionId, CancellationToken cancellationToken);
+
+    /// <inheritdoc cref="MarkTeamReadAsync"/>
+    Task<MessagesBadgeResponse> MarkGroupReadAsync(long groupId, CancellationToken cancellationToken = default);
+
+    /// <summary>Every custom group, with its active members, for whoever manages groups (checked by the endpoint).</summary>
+    Task<IReadOnlyList<ChatGroupDetailResponse>> GroupsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Every active member of staff, of any business: who can be put in a group.</summary>
+    Task<IReadOnlyList<ContactResponse>> GroupCandidatesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>A new custom group with the caller in it, and a grey line saying they made it.</summary>
+    Task<ChatGroupDetailResponse> CreateGroupAsync(CreateChatGroupRequest request, CancellationToken cancellationToken = default);
+
+    Task<ChatGroupDetailResponse> RenameGroupAsync(long groupId, RenameChatGroupRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Adds people; they see the group's whole history, none of it unread.</summary>
+    Task<ChatGroupDetailResponse> AddGroupMembersAsync(long groupId, AddChatGroupMembersRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Takes someone out: they lose the chat, history included.</summary>
+    Task<ChatGroupDetailResponse> RemoveGroupMemberAsync(long groupId, long userId, CancellationToken cancellationToken = default);
+
+    /// <summary>The caller leaves a group they are in.</summary>
+    Task LeaveGroupAsync(long groupId, CancellationToken cancellationToken = default);
+
+    /// <summary>The group's photo, from the caller's upload (a photo).</summary>
+    Task<ChatGroupDetailResponse> SetGroupPhotoAsync(long groupId, AttachFileRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Back to the people icon.</summary>
+    Task<ChatGroupDetailResponse> RemoveGroupPhotoAsync(long groupId, CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the group for everyone, with every message, attachment and read marker in it.</summary>
+    Task DeleteGroupAsync(long groupId, CancellationToken cancellationToken = default);
+
+    /// <summary>Whether the caller may see the group's photo: its members, and whoever manages groups.</summary>
+    Task<bool> CanSeeGroupPhotoAsync(long groupId, CancellationToken cancellationToken = default);
+
     /// <summary>
-    /// Whether the caller may read this conversation now: Announcements, a team chat they are in, or their direct chat
-    /// with someone they can reach.
+    /// Whether the caller may read this conversation now: Announcements, a team chat or custom group they are in, or
+    /// their direct chat with someone they can reach.
     /// </summary>
     Task<bool> CanReadConversationAsync(long conversationId, CancellationToken cancellationToken = default);
 

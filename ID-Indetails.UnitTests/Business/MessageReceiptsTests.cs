@@ -59,5 +59,9 @@ public class MessageReceiptsTests
         MessageReceipts.CanSee(ConversationType.Group, 2, true, false, 1).ShouldBeTrue();
         MessageReceipts.CanSee(ConversationType.Announcements, 2, true, false, 1).ShouldBeFalse();
         MessageReceipts.CanSee(ConversationType.Announcements, 2, false, true, 1).ShouldBeTrue();
+        // a custom group as a team chat: only the super admins in it read it at all
+        MessageReceipts.CanSee(ConversationType.CustomGroup, 1, false, false, 1).ShouldBeTrue();
+        MessageReceipts.CanSee(ConversationType.CustomGroup, 2, false, false, 1).ShouldBeFalse();
+        MessageReceipts.CanSee(ConversationType.CustomGroup, 2, true, false, 1).ShouldBeTrue();
     }
 }

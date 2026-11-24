@@ -186,6 +186,15 @@ public sealed class FileService(
             }
         }
 
+        // a custom group's photo is seen by its members and by whoever manages groups
+        foreach (var groupId in uses.GroupPhotoIds)
+        {
+            if (await messaging.CanSeeGroupPhotoAsync(groupId, cancellationToken))
+            {
+                return true;
+            }
+        }
+
         return false;
     }
 

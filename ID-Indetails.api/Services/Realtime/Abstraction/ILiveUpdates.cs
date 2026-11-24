@@ -1,7 +1,7 @@
 namespace ID_Indetails.api.Services.Realtime.Abstraction;
 
-/// <summary>Which chat changed: a team's, the direct chat with <paramref name="UserId"/>, or Announcements.</summary>
-public sealed record LiveChat(long? TeamId, long? UserId, bool Announcements = false)
+/// <summary>Which chat changed: a team's, the direct chat with <paramref name="UserId"/>, Announcements, or a custom group (<paramref name="GroupId"/>, its conversation id).</summary>
+public sealed record LiveChat(long? TeamId, long? UserId, bool Announcements = false, long? GroupId = null)
 {
     public static LiveChat ForAnnouncements { get; } = new(null, null, true);
 }
@@ -52,7 +52,7 @@ public static class LiveSignals
     public const string Notifications = "notifications";
     public const string Messages = "messages";
 
-    /// <summary><c>{ teamId, userId, announcements }</c> as for <see cref="Messages"/>: that chat's ticks changed.</summary>
+    /// <summary><c>{ teamId, userId, announcements, groupId }</c> as for <see cref="Messages"/>: that chat's ticks changed.</summary>
     public const string Receipts = "receipts";
 
     /// <summary><c>{ projectId }</c>: that project's client portal discussion changed.</summary>

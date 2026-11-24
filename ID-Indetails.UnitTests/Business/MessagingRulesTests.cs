@@ -89,5 +89,43 @@ public class MessagingRulesTests
         {
             MessagingRules.CheckDelete(7, 7, kind, types)!.Code.ShouldBe(ErrorCodes.MessageNotDeletable);
         }
+
+        // a group's grey line isn't a voice message either
+        MessagingRules.CheckDelete(7, 7, MessageKinds.GroupEvent, [])!.Code.ShouldBe(ErrorCodes.MessageNotDeletable);
+    }
+
+    [Fact]
+    public void Anyone_active_on_staff_of_any_business_can_be_put_in_a_group()
+    {
+        P[] everyone = [Super, DesignAdmin, Engineer, SiteWorker, ExecutionAdmin];
+        MessagingRules.CheckGroupMembers([Super.Id, Engineer.Id, SiteWorker.Id, ExecutionAdmin.Id], everyone).ShouldBeNull();
+        MessagingRules.CheckGroupMembers([], everyone).ShouldBeNull();
+
+        var gone = Analyst with { Status = UserStatus.Deactivated };
+        var deactivated = MessagingRules.CheckGroupMembers([Engineer.Id, gone.Id], [Engineer, gone])!;
+        (deactivated.Kind, deactivated.Code, deactivated.Field).ShouldBe((DenialKind.Validation, ErrorCodes.ValidationFailed, "memberIds"));
+        deactivated.Message.ShouldBe("Only active staff can be in a group.");
+
+        // someone who doesn't exist (a portal client's account is no member of staff)
+        MessagingRules.CheckGroupMembers([Engineer.Id, 999], [Engineer])!.Field.ShouldBe("memberIds");
+    }
+
+    [Fact]
+    public void A_group_holds_at_most_two_hundred_people()
+    {
+        MessagingRules.CheckGroupSize(MessagingRules.MaxGroupMembers).ShouldBeNull();
+        MessagingRules.CheckGroupSize(MessagingRules.MaxGroupMembers + 1)!.Message.ShouldBe("A group has at most 200 people.");
+    }
+
+    [Fact]
+    public void A_groups_grey_lines_name_what_changed()
+    {
+        GroupEvents.Created("Site leads").ShouldBe("created the group “Site leads”");
+        GroupEvents.Renamed("Leads").ShouldBe("renamed the group to “Leads”");
+        GroupEvents.Added(["Sara Haddad"]).ShouldBe("added Sara Haddad");
+        GroupEvents.Added(["Ali Nasser", "Sara Haddad"]).ShouldBe("added Ali Nasser and Sara Haddad");
+        GroupEvents.Added(["Ali Nasser", "Rana Aoun", "Sara Haddad"]).ShouldBe("added Ali Nasser, Rana Aoun and Sara Haddad");
+        GroupEvents.Removed("Sara Haddad").ShouldBe("removed Sara Haddad");
+        GroupEvents.Left.ShouldBe("left the group");
     }
 }

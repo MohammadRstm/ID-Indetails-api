@@ -93,6 +93,7 @@ public static class PermissionExplanations
 
         // Messages
         [PermissionCodes.MessageAnnounce] = "Write in Announcements, the chat every active member of staff reads and is told about on their phone. Everyone else only reads it.",
+        [PermissionCodes.MessageManageGroups] = "Create chat groups with a name and any active staff from any business, rename them, change their photo, add and remove people, and delete a group with its whole history. You read a group only if you are in it.",
 
         // The company website
         [PermissionCodes.WebsiteView] = "See the Website page: the projects, services, locations, contact details and favicon the company's public website shows. Changing them needs \"Edit the company website\".",

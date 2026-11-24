@@ -18,9 +18,9 @@ public interface IPushQueue
 
     /// <summary>
     /// A message, to each of <paramref name="recipientIds"/>; <paramref name="mentionedIds"/> were mentioned in it.
-    /// <paramref name="announcement"/>: it was written in Announcements.
+    /// <paramref name="announcement"/>: it was written in Announcements. <paramref name="groupId"/>: in that custom group.
     /// </summary>
-    void Message(long messageId, long? teamId, IEnumerable<long> recipientIds, IEnumerable<long> mentionedIds, bool announcement = false);
+    void Message(long messageId, long? teamId, IEnumerable<long> recipientIds, IEnumerable<long> mentionedIds, bool announcement = false, long? groupId = null);
 
     /// <summary>A push with no notification row: one of the reminders.</summary>
     void Reminder(long userId, string kind, PushTarget target, string? projectTitle);
@@ -35,6 +35,6 @@ public abstract record PushJob(long RecipientId);
 
 public sealed record NotificationPushJob(long RecipientId, long NotificationId, bool Digest) : PushJob(RecipientId);
 
-public sealed record MessagePushJob(long RecipientId, long MessageId, long? TeamId, bool Mentioned, bool Announcement = false) : PushJob(RecipientId);
+public sealed record MessagePushJob(long RecipientId, long MessageId, long? TeamId, bool Mentioned, bool Announcement = false, long? GroupId = null) : PushJob(RecipientId);
 
 public sealed record ReminderPushJob(long RecipientId, string Kind, PushTarget Target, string? ProjectTitle) : PushJob(RecipientId);

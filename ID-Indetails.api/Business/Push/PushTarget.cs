@@ -39,6 +39,9 @@ public sealed record PushTarget
 
     public long? UserId { get; init; }
 
+    /// <summary>A custom chat group (its conversation id), for <see cref="Conversation"/>. A phone app that doesn't know it opens the messages.</summary>
+    public long? GroupId { get; init; }
+
     public DateOnly? WeekStart { get; init; }
 
     /// <summary><c>notifications</c>, <c>today</c>, <c>work</c>, <c>meetings</c>, <c>company</c> or <c>announcements</c>.</summary>
@@ -51,8 +54,9 @@ public sealed record PushTarget
     /// <summary>The Announcements chat.</summary>
     public static PushTarget Announcements { get; } = OfPage("announcements");
 
-    /// <summary>A team chat, or the direct chat with <paramref name="userId"/> (whoever wrote to the reader).</summary>
-    public static PushTarget Chat(long? teamId, long? userId) => new() { Type = Conversation, TeamId = teamId, UserId = teamId is null ? userId : null };
+    /// <summary>A team chat, a custom group, or the direct chat with <paramref name="userId"/> (whoever wrote to the reader).</summary>
+    public static PushTarget Chat(long? teamId, long? userId, long? groupId = null)
+        => new() { Type = Conversation, TeamId = teamId, GroupId = groupId, UserId = teamId is null && groupId is null ? userId : null };
 
     public static PushTarget LabourWeek(long projectId, DateOnly weekStart) => new() { Type = LabourWeekType, ProjectId = projectId, WeekStart = weekStart };
 

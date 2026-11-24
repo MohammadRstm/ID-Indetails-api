@@ -891,6 +891,15 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(16)")
                         .HasColumnName("domain_code");
 
+                    b.Property<string>("Name")
+                        .HasMaxLength(80)
+                        .HasColumnType("varchar(80)")
+                        .HasColumnName("name");
+
+                    b.Property<long?>("PhotoFileId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("photo_file_id");
+
                     b.Property<long?>("TeamId")
                         .HasColumnType("bigint")
                         .HasColumnName("team_id");
@@ -910,6 +919,9 @@ namespace ID_Indetails.api.Data.Migrations
                     b.HasIndex("DomainCode")
                         .HasDatabaseName("ix_conversations_domain_code");
 
+                    b.HasIndex("PhotoFileId")
+                        .HasDatabaseName("ix_conversations_photo_file_id");
+
                     b.HasIndex("TeamId")
                         .IsUnique()
                         .HasDatabaseName("ix_conversations_team_id");
@@ -920,10 +932,34 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.ToTable("conversations", null, t =>
                         {
-                            t.HasCheckConstraint("ck_conversations_shape", "(`type` = 'dm' AND `team_id` IS NULL AND `dm_user_low_id` IS NOT NULL AND `dm_user_high_id` IS NOT NULL AND `dm_user_low_id` < `dm_user_high_id`) OR (`type` = 'group' AND `team_id` IS NOT NULL AND `dm_user_low_id` IS NULL AND `dm_user_high_id` IS NULL) OR (`type` = 'announcements' AND `team_id` IS NULL AND `dm_user_low_id` IS NULL AND `dm_user_high_id` IS NULL)");
+                            t.HasCheckConstraint("ck_conversations_shape", "(`type` = 'dm' AND `team_id` IS NULL AND `dm_user_low_id` IS NOT NULL AND `dm_user_high_id` IS NOT NULL AND `dm_user_low_id` < `dm_user_high_id` AND `name` IS NULL AND `photo_file_id` IS NULL) OR (`type` = 'group' AND `team_id` IS NOT NULL AND `dm_user_low_id` IS NULL AND `dm_user_high_id` IS NULL AND `name` IS NULL AND `photo_file_id` IS NULL) OR (`type` = 'announcements' AND `team_id` IS NULL AND `dm_user_low_id` IS NULL AND `dm_user_high_id` IS NULL AND `name` IS NULL AND `photo_file_id` IS NULL) OR (`type` = 'custom_group' AND `team_id` IS NULL AND `dm_user_low_id` IS NULL AND `dm_user_high_id` IS NULL AND `name` IS NOT NULL)");
 
-                            t.HasCheckConstraint("ck_conversations_type", "`type` IN ('dm', 'group', 'announcements')");
+                            t.HasCheckConstraint("ck_conversations_type", "`type` IN ('dm', 'group', 'announcements', 'custom_group')");
                         });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ConversationMember", b =>
+                {
+                    b.Property<long>("ConversationId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("conversation_id");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("added_at");
+
+                    b.HasKey("ConversationId", "UserId")
+                        .HasName("pk_conversation_members");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_conversation_members_user_id");
+
+                    b.ToTable("conversation_members", (string)null);
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.ConversationRead", b =>
@@ -2975,6 +3011,11 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             Code = "message:announce",
                             Description = "Write in Announcements, the chat everyone reads"
+                        },
+                        new
+                        {
+                            Code = "message:manage_groups",
+                            Description = "Create chat groups of any staff, rename them, change who is in them and delete them"
                         },
                         new
                         {
@@ -6156,6 +6197,11 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "super_admin",
+                            PermissionCode = "message:manage_groups"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
                             PermissionCode = "website:view"
                         },
                         new
@@ -8322,6 +8368,12 @@ namespace ID_Indetails.api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_conversations_domains_domain_code");
 
+                    b.HasOne("ID_Indetails.api.Models.StoredFile", null)
+                        .WithMany()
+                        .HasForeignKey("PhotoFileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_conversations_files_photo_file_id");
+
                     b.HasOne("ID_Indetails.api.Models.Team", "Team")
                         .WithMany()
                         .HasForeignKey("TeamId")
@@ -8329,6 +8381,27 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasConstraintName("fk_conversations_teams_team_id");
 
                     b.Navigation("Team");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ConversationMember", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.Conversation", "Conversation")
+                        .WithMany("Members")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_conversation_members_conversations_conversation_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_conversation_members_users_user_id");
+
+                    b.Navigation("Conversation");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.ConversationRead", b =>
@@ -10229,6 +10302,8 @@ namespace ID_Indetails.api.Data.Migrations
 
             modelBuilder.Entity("ID_Indetails.api.Models.Conversation", b =>
                 {
+                    b.Navigation("Members");
+
                     b.Navigation("Messages");
                 });
 

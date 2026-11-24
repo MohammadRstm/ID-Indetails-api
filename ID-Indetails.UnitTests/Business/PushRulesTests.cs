@@ -120,6 +120,7 @@ public class PushRulesTests
     {
         PushTarget.Chat(4, 20).ShouldBe(new PushTarget { Type = PushTarget.Conversation, TeamId = 4 });
         PushTarget.Chat(null, 20).ShouldBe(new PushTarget { Type = PushTarget.Conversation, UserId = 20 });
+        PushTarget.Chat(null, 20, 31).ShouldBe(new PushTarget { Type = PushTarget.Conversation, GroupId = 31 });
     }
 
     [Fact]

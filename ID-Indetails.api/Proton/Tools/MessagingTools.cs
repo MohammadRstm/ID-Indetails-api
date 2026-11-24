@@ -10,16 +10,16 @@ namespace ID_Indetails.api.Proton.Tools;
 
 public sealed record FindRecipientInput
 {
-    [Description("Part of the person's or department's name, as the user said it.")]
+    [Description("Part of the person's, department's or chat group's name, as the user said it.")]
     public required string Text { get; init; }
 }
 
-/// <param name="Kind">person or team.</param>
+/// <param name="Kind">person, team or group (a chat group the user is in).</param>
 /// <param name="Detail">What tells people of the same name apart: role, position, team and business.</param>
 public sealed record RecipientRow(string Kind, long Id, string Name, string Detail);
 
 /// <summary>
-/// Who the user may message, by name: the people their chat lists as contacts and the team chats they are in, read
+/// Who the user may message, by name: the people their chat lists as contacts and the team chats and chat groups they are in, read
 /// as the user through the messaging service. Not the employee directory: someone listed there may be out of reach.
 /// </summary>
 public sealed class FindRecipientTool(IMessagingService messaging) : ProtonTool<FindRecipientInput>
@@ -29,7 +29,7 @@ public sealed class FindRecipientTool(IMessagingService messaging) : ProtonTool<
     public override string Name => "find_recipient";
 
     public override string Description =>
-        "Find someone the user can message, or a department chat they are in, by name, before opening a chat or drafting a " +
+        "Find someone the user can message, or a department chat or chat group they are in, by name, before opening a chat or drafting a " +
         "message. Several matches: let the user pick with offer_choices.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfRuleBased<MessagesController>(nameof(MessagesController.Contacts));
@@ -47,16 +47,26 @@ public sealed class FindRecipientTool(IMessagingService messaging) : ProtonTool<
             .Where(c => Matches(c.Name))
             .Select(c => new RecipientRow("person", c.Id, c.Name,
                 string.Join(", ", new[] { c.Role.Replace('_', ' '), c.Position, c.Team?.Name, c.Domain }.Where(s => !string.IsNullOrWhiteSpace(s)))));
-        var teams = (await messaging.ConversationsAsync(cancellationToken))
+        var conversations = await messaging.ConversationsAsync(cancellationToken);
+        var teams = conversations
             .Select(c => c.Team)
             .OfType<DTO.Response.Messaging.ChatTeamResponse>()
             .Where(t => Matches(t.Name))
             .Select(t => new RecipientRow("team", t.Id, t.Name, $"team chat, {t.Domain}"));
-        var rows = people.Concat(teams)
+        var groups = conversations
+            .Select(c => c.Group)
+            .OfType<DTO.Response.Messaging.ChatGroupResponse>()
+            .Where(g => Matches(g.Name))
+            .Select(g => new RecipientRow("group", g.Id, g.Name, $"chat group, {g.MemberCount} people"));
+        var rows = people.Concat(teams).Concat(groups)
             .OrderBy(r => r.Name.StartsWith(text, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
             .Take(Max)
             .ToList();
-        return new ProtonToolOutput(rows, rows.Select(r => new ProtonRef(r.Kind == "team" ? ProtonRefType.Team : ProtonRefType.Person, r.Id, r.Name)).ToList());
+        // a chat group is no record Proton can link to
+        return new ProtonToolOutput(rows, rows
+            .Where(r => r.Kind != "group")
+            .Select(r => new ProtonRef(r.Kind == "team" ? ProtonRefType.Team : ProtonRefType.Person, r.Id, r.Name))
+            .ToList());
     }
 }
 
@@ -71,7 +81,7 @@ public sealed class GetMyInboxTool(IMessagingService messaging, IClock clock) : 
     public override string Name => "get_my_inbox";
 
     public override string Description =>
-        "The user's own chats: who or which department, unread messages, whether one mentions them, and when the last came. " +
+        "The user's own chats: who, which department or which chat group, unread messages, whether one mentions them, and when the last came. " +
         "You can't read what messages say; open the chat for the user instead.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfRuleBased<MessagesController>(nameof(MessagesController.Conversations));
@@ -83,14 +93,16 @@ public sealed class GetMyInboxTool(IMessagingService messaging, IClock clock) : 
                 ? new InboxRow("team", team.Id, team.Name, c.Unread, c.UnreadMention, clock.Local(c.LastMessage?.CreatedAt))
                 : c.Person is { } person
                     ? new InboxRow("person", person.Id, person.Name, c.Unread, c.UnreadMention, clock.Local(c.LastMessage?.CreatedAt))
-                    : new InboxRow("announcements", 0, "Announcements", c.Unread, false, clock.Local(c.LastMessage?.CreatedAt)))
+                    : c.Group is { } group
+                        ? new InboxRow("group", group.Id, group.Name, c.Unread, c.UnreadMention, clock.Local(c.LastMessage?.CreatedAt))
+                        : new InboxRow("announcements", 0, "Announcements", c.Unread, false, clock.Local(c.LastMessage?.CreatedAt)))
             .OrderByDescending(r => r.Unread > 0)
             .ThenByDescending(r => r.LastActivity)
             .Take(20)
             .ToList();
-        // Announcements is no record Proton can open
+        // Announcements and chat groups are no records Proton can open
         return new ProtonToolOutput(rows, rows
-            .Where(r => r.Kind != "announcements")
+            .Where(r => r.Kind is not ("announcements" or "group"))
             .Select(r => new ProtonRef(r.Kind == "team" ? ProtonRefType.Team : ProtonRefType.Person, r.Id, r.Name))
             .ToList());
     }

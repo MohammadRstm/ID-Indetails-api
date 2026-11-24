@@ -74,8 +74,26 @@ public sealed record MessageResponse(
 /// <summary>Oldest first. <paramref name="HasMore"/> says older messages exist.</summary>
 public sealed record MessagePageResponse(IReadOnlyList<MessageResponse> Items, bool HasMore);
 
-/// <summary>A team chat (<c>group</c>, with <paramref name="Team"/>) or a direct chat (<c>dm</c>, with <paramref name="Person"/>).</summary>
-/// <param name="OnlineCount">Team chats: how many of the others in it have the app open now.</param>
+/// <summary>A custom chat group, as its members see it in their list of chats.</summary>
+/// <param name="PhotoFileId">Its photo, read through <c>GET /api/files/{id}</c>; null shows the people icon.</param>
+/// <param name="MemberCount">Its active members, the caller included.</param>
+public sealed record ChatGroupResponse(long Id, string Name, long? PhotoFileId, int MemberCount);
+
+/// <summary>A custom group for whoever manages groups (<c>message:manage_groups</c>), with its active members.</summary>
+/// <param name="IsMember">Whether the caller is in it: only members read its messages.</param>
+public sealed record ChatGroupDetailResponse(
+    long Id,
+    string Name,
+    long? PhotoFileId,
+    IReadOnlyList<ContactResponse> Members,
+    bool IsMember,
+    DateTime CreatedAt);
+
+/// <summary>
+/// A team chat (<c>group</c>, with <paramref name="Team"/>), a direct chat (<c>dm</c>, with <paramref name="Person"/>),
+/// Announcements, or a custom group (<c>custom_group</c>, with <paramref name="Group"/>).
+/// </summary>
+/// <param name="OnlineCount">Team chats and custom groups: how many of the others in it have the app open now.</param>
 public sealed record ConversationResponse(
     ConversationType Type,
     ChatTeamResponse? Team,
@@ -83,7 +101,8 @@ public sealed record ConversationResponse(
     MessageResponse? LastMessage,
     int Unread,
     bool UnreadMention,
-    int? OnlineCount = null);
+    int? OnlineCount = null,
+    ChatGroupResponse? Group = null);
 
 /// <summary>For the header: every unread message, and whether any of them mentions the caller.</summary>
 public sealed record MessagesBadgeResponse(int Unread, bool Mention);

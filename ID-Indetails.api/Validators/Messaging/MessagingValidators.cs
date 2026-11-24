@@ -31,3 +31,39 @@ public sealed class MessagePageQueryValidator : AbstractValidator<MessagePageQue
         RuleFor(x => x.Limit).InclusiveBetween(1, MaxLimit).WithMessage($"Limit must be between 1 and {MaxLimit}.");
     }
 }
+
+public sealed class CreateChatGroupRequestValidator : AbstractValidator<CreateChatGroupRequest>
+{
+    public CreateChatGroupRequestValidator()
+    {
+        RuleFor(x => x.Name).Must(name => !string.IsNullOrWhiteSpace(name)).WithMessage("Give the group a name.");
+        RuleFor(x => x.Name).Must(name => (name ?? string.Empty).Trim().Length <= MessagingRules.MaxGroupNameLength)
+            .WithMessage($"A group's name is at most {MessagingRules.MaxGroupNameLength} characters.");
+        RuleFor(x => x.MemberIds).Must(ids => ids.Distinct().Count() == ids.Count).WithMessage("Pick each person once.");
+        RuleFor(x => x.MemberIds).Must(ids => ids.Count <= MessagingRules.MaxGroupMembers)
+            .WithMessage($"A group has at most {MessagingRules.MaxGroupMembers} people.");
+        RuleForEach(x => x.MemberIds).GreaterThan(0).WithMessage("Members must be people.");
+    }
+}
+
+public sealed class RenameChatGroupRequestValidator : AbstractValidator<RenameChatGroupRequest>
+{
+    public RenameChatGroupRequestValidator()
+    {
+        RuleFor(x => x.Name).Must(name => !string.IsNullOrWhiteSpace(name)).WithMessage("Give the group a name.");
+        RuleFor(x => x.Name).Must(name => (name ?? string.Empty).Trim().Length <= MessagingRules.MaxGroupNameLength)
+            .WithMessage($"A group's name is at most {MessagingRules.MaxGroupNameLength} characters.");
+    }
+}
+
+public sealed class AddChatGroupMembersRequestValidator : AbstractValidator<AddChatGroupMembersRequest>
+{
+    public AddChatGroupMembersRequestValidator()
+    {
+        RuleFor(x => x.UserIds).NotEmpty().WithMessage("Pick someone to add.");
+        RuleFor(x => x.UserIds).Must(ids => ids.Distinct().Count() == ids.Count).WithMessage("Pick each person once.");
+        RuleFor(x => x.UserIds).Must(ids => ids.Count <= MessagingRules.MaxGroupMembers)
+            .WithMessage($"A group has at most {MessagingRules.MaxGroupMembers} people.");
+        RuleForEach(x => x.UserIds).GreaterThan(0).WithMessage("Members must be people.");
+    }
+}
