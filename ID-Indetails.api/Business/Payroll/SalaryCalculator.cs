@@ -274,7 +274,8 @@ public static class SalaryCalculator
         var expected = monthDays.Sum(d => d.Hours!.Expected);
         var paidExcuses = input.Excuses.Where(e => e.IsPaid).Sum(e => e.Kind == ExcuseKind.WholeMonth
             ? expected
-            : (e.Minutes ?? 0) + monthDays.Where(d => e.Days.Contains(d.Day)).Sum(d => d.Hours!.Expected));
+            : (e.Minutes ?? 0) + HoursLedger.BreakShareOf(e.Minutes ?? 0, monthDays.Select(d => d.Hours!))
+                + monthDays.Where(d => e.Days.Contains(d.Day)).Sum(d => d.Hours!.Expected));
         var normalByDay = work.GroupBy(w => w.Day).ToDictionary(g => g.Key, g => g.Sum(w => w.Normal));
         var breaks = monthDays.Where(d => d.Hours!.BreakCounts).Sum(d => d.Hours!.BreakTaken(normalByDay.GetValueOrDefault(d.Day)));
         return new Threshold(Math.Max(hours * 60, expected), work.Sum(w => w.Minutes) + breaks + paidExcuses);

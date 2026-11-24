@@ -82,7 +82,8 @@ public static class HoursLedger
             .ToList();
         var breaks = counted.Sum(d => d.Item1.BreakTaken(d.Normal));
         var covered = counted.Sum(d => d.Item1.BreakUnshared(d.Normal));
-        var excused = excuses.WholeMonth ? expected : Math.Min(expected, excuses.Minutes + excusedDays + covered);
+        var minutes = excuses.Minutes + BreakShareOf(excuses.Minutes, workingDays.Select(d => d.Hours!));
+        var excused = excuses.WholeMonth ? expected : Math.Min(expected, minutes + excusedDays + covered);
 
         var normal = work.Sum(w => w.Normal) + breaks;
         var overtime = work.Sum(w => w.Overtime);
@@ -120,6 +121,19 @@ public static class HoursLedger
             workingDays.Sum(d => d.Hours!.Required),
             breaks,
             covered);
+    }
+
+    /// <summary>
+    /// The break excused minutes bring once the break counts: they have no day, so their share at the month's own
+    /// break to required hours (3 excused hours of a 7-hour day with an hour's break bring 26 minutes). 0 before.
+    /// </summary>
+    public static int BreakShareOf(int minutes, IEnumerable<WorkHours> workingDays)
+    {
+        var counting = workingDays.Where(h => h.BreakCounts).ToList();
+        var required = counting.Sum(h => h.Required);
+        return minutes <= 0 || required <= 0
+            ? 0
+            : (int)Math.Round(minutes * (decimal)counting.Sum(h => h.PaidBreak) / required, MidpointRounding.AwayFromZero);
     }
 
     public static IEnumerable<DateOnly> Days(DateOnly from, DateOnly untilExclusive)

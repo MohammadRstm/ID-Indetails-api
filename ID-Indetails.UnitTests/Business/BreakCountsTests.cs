@@ -1,6 +1,7 @@
 using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Business.WorkingTime;
+using ID_Indetails.api.Enums;
 using Shouldly;
 using Work = ID_Indetails.api.Business.Payroll.Overtime.Work;
 
@@ -120,6 +121,18 @@ public class BreakCountsTests
         ledger.Breaks.ShouldBe(22 * 60 + 43);
         ledger.BreaksCovered.ShouldBe(17);
         ledger.Short.ShouldBe(120);
+    }
+
+    [Fact]
+    public void Excused_hours_bring_their_share_of_the_break()
+    {
+        // a missed day with 3 hours excused: 3 hours and 26 minutes covered (3/7 of the hour), so 4 hours 34 minutes short
+        var result = SalaryCalculator.Calculate(new SalaryCalculator.Input(December, Today, new(2026, 1, 1), true, [Monthly], Calendar,
+            EveryDay(420, skip: 1), [new SalaryCalculator.Excuse(ExcuseKind.Minutes, 180, [], IsPaid: true)]))!;
+
+        result.Ledger!.Excused.ShouldBe(180 + 26);
+        result.Ledger.Short.ShouldBe(480 - 206);
+        HoursLedger.BreakShareOf(180, [new WorkHours(540, 1020, 60, BreakCounts: false)]).ShouldBe(0);
     }
 
     [Fact]

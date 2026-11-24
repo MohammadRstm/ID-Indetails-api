@@ -144,7 +144,7 @@ So a Design salary's month is its project labour (every logged hour and the shar
 - time within hours beyond the day's required hours, taken from the latest work of the day.
 
 **The hours ledger** (`HoursLedger.cs`) applies to Design employees only, from the day they joined, and up to today while the month is in progress:
-- *Expected* is the required hours of every working day; from 1 December 2026 their whole span, the break included, with the break taken added to what was worked and the company's part of a short day's break counted as excused (`HoursLedger.Result.Breaks`, `BreaksCovered`).
+- *Expected* is the required hours of every working day; from 1 December 2026 their whole span, the break included, with the break taken added to what was worked, the company's part of a short day's break counted as excused, and excused minutes bringing their share of the break (3 of 7 hours, 26 minutes of an hour's break; `HoursLedger.BreakShareOf`) (`HoursLedger.Result.Breaks`, `BreaksCovered`).
 - *Excused* minutes and days (paid or not) reduce what is owed; a whole-month excuse clears it. Days of granted time off count as excused days ([time-off.md](time-off.md)).
 - Overtime first *makes up* any shortfall, taken from the month's overtime in date order; the rest is paid as overtime.
 - A closed month still short is *flagged*; the month in progress is *behind*.
