@@ -363,6 +363,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IMeetingReminders, MeetingReminders>();
         services.AddScoped<IReportService, ReportService>();
         services.AddScoped<IUtilizationService, UtilizationService>();
+        services.AddScoped<INotLoggingService, NotLoggingService>();
         services.AddScoped<IMoneyRollupService, MoneyRollupService>();
         services.AddScoped<IFinanceInsightService, FinanceInsightService>();
         services.AddScoped<IDomainInsightService, DomainInsightService>();

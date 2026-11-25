@@ -2,6 +2,7 @@ using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Business.Projects;
+using ID_Indetails.api.Business.Reports;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Reports;
@@ -309,7 +310,7 @@ public sealed class ReportService(
                 null,
                 null)));
 
-        var notLogging = people.Where(p => p.Role == RoleCodes.Employee && !loggingThisWeek.Contains(p.Id)).OrderBy(p => p.Name).ToList();
+        var notLogging = NotLoggingRules.Of(people, loggingThisWeek);
         if (notLogging.Count > 0)
         {
             items.Add(new AttentionItemResponse(

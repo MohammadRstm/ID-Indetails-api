@@ -255,6 +255,8 @@ public static class ProtonCoverage
         Open("ExpenseCategories.Order", "a business's expense categories are kept on Settings › Finance; Proton doesn't change them yet"),
         Open("ExpenseCategories.Remove", "a business's expense categories are kept on Settings › Finance; Proton doesn't change them yet"),
         Open("ReopenedMonths.End", "a super admin locks a reopened month again on Company › Settings; Proton doesn't do it yet"),
+        Open("Reports.Remind", "asking a Design employee who hasn't logged this week to do it is sent from the Not logging page of the dashboard; Proton doesn't send it yet"),
+        Open("Reports.RemindAll", "asking everyone who hasn't logged this week to do it is sent from the Not logging page of the dashboard; Proton doesn't send it yet"),
 
         // Time off: not in Proton yet (the user's decision, 9 Nov 2026); the pages are in the app
         Open("MeTimeOff.Ask", "time off is asked for on the Time off page; Proton doesn't ask for it yet"),

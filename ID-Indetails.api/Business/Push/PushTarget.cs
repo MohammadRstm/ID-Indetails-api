@@ -98,7 +98,7 @@ public sealed record PushTarget
             NotificationKinds.WorkLogged or NotificationKinds.EntryComment => Subject(WorkEntry, "work_entry", subjectType, subjectId),
             NotificationKinds.LogDepartmentBlocked => ProjectPart(projectId, projectDomain, null),
             NotificationKinds.WorkEntryReleased => OfPage("work"),
-            NotificationKinds.WorkDigest or NotificationKinds.WeeklySummary or NotificationKinds.HoursMissed or NotificationKinds.MonthReopened => OfPage("work"),
+            NotificationKinds.WorkDigest or NotificationKinds.WeeklySummary or NotificationKinds.HoursMissed or NotificationKinds.HoursReminder or NotificationKinds.MonthReopened => OfPage("work"),
             NotificationKinds.HoursMissedList => OfPage("today"),
 
             NotificationKinds.InvitationAccepted => Subject(Person, "user", subjectType, subjectId),

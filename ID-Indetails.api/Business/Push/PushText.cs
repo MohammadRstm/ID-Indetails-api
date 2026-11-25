@@ -95,6 +95,7 @@ public static class PushText
             NotificationKinds.HoursMissed => new("Hours to log", Date(payload, "day") is { } day
                 ? $"You logged less than {Day(day)} asked for. You can still log it this month."
                 : "You logged less than a working day asked for. You can still log it this month."),
+            NotificationKinds.HoursReminder => new("Log your hours", $"{Named(Text(payload, "senderName"), actor)} wants you to log your hours for this week now."),
             NotificationKinds.HoursMissedList => new("Hours to log", Date(payload, "day") is { } listed
                 ? $"Some people logged less than {Day(listed)} asked for."
                 : "Some people logged less than a working day asked for."),

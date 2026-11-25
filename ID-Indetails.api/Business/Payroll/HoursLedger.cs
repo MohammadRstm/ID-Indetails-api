@@ -17,6 +17,9 @@ namespace ID_Indetails.api.Business.Payroll;
 /// </summary>
 public static class HoursLedger
 {
+    /// <summary>A day someone was expected to work, with its hours.</summary>
+    public sealed record WorkingDay(DateOnly Day, WorkHours Hours);
+
     public sealed record Excuses(bool WholeMonth, int Minutes, IReadOnlySet<DateOnly> Days);
 
     /// <param name="Normal">Work within hours, plus the break taken once the break counts.</param>
@@ -64,25 +67,16 @@ public static class HoursLedger
             until = left.AddDays(1);
         }
 
-        var from = joinedOn > month ? joinedOn : month;
-
         // Days away between two periods of employment aren't expected.
-        var workingDays = Days(from, until)
-            .Where(d => !Employment.InGap(gaps, d))
-            .Select(d => (Day: d, Hours: calendar.HoursOn(d)))
-            .Where(d => d.Hours is not null)
-            .ToList();
-        var expected = workingDays.Sum(d => d.Hours!.Expected);
-        var excusedDays = workingDays.Where(d => excuses.Days.Contains(d.Day)).Sum(d => d.Hours!.Expected);
+        var workingDays = WorkingDaysIn(month, until, joinedOn, leftOn, calendar, gaps);
+        var expected = ExpectedOf(workingDays);
+        var excusedDays = ExcusedDaysOf(workingDays, excuses.Days);
 
         // once the break counts: the break taken is worked; the rest of a short day's break is the company's, so covered
-        var normalByDay = work.GroupBy(w => w.Day).ToDictionary(g => g.Key, g => g.Sum(w => w.Normal));
-        var counted = workingDays.Where(d => d.Hours!.BreakCounts && !excuses.Days.Contains(d.Day))
-            .Select(d => (d.Hours!, Normal: normalByDay.GetValueOrDefault(d.Day)))
-            .ToList();
-        var breaks = counted.Sum(d => d.Item1.BreakTaken(d.Normal));
-        var covered = counted.Sum(d => d.Item1.BreakUnshared(d.Normal));
-        var minutes = excuses.Minutes + BreakShareOf(excuses.Minutes, workingDays.Select(d => d.Hours!));
+        var counted = BreakDays(workingDays, work, excuses.Days);
+        var breaks = counted.Sum(d => d.Hours.BreakTaken(d.Normal));
+        var covered = counted.Sum(d => d.Hours.BreakUnshared(d.Normal));
+        var minutes = excuses.Minutes + BreakShareOf(excuses.Minutes, workingDays.Select(d => d.Hours));
         var excused = excuses.WholeMonth ? expected : Math.Min(expected, minutes + excusedDays + covered);
 
         var normal = work.Sum(w => w.Normal) + breaks;
@@ -134,6 +128,53 @@ public static class HoursLedger
         return minutes <= 0 || required <= 0
             ? 0
             : (int)Math.Round(minutes * (decimal)counting.Sum(h => h.PaidBreak) / required, MidpointRounding.AwayFromZero);
+    }
+
+    /// <summary>
+    /// The days from <paramref name="from"/> up to <paramref name="untilExclusive"/> someone was expected to work: their
+    /// working days (<see cref="PersonCalendar.HoursOn"/>) from the day they joined, up to the day they left, outside
+    /// the gaps between two periods of employment. The month's ledger and any other stretch of days (a week) choose them here.
+    /// </summary>
+    public static IReadOnlyList<WorkingDay> WorkingDaysIn(
+        DateOnly from,
+        DateOnly untilExclusive,
+        DateOnly joinedOn,
+        DateOnly? leftOn,
+        PersonCalendar calendar,
+        IReadOnlyList<Employment.Gap>? gaps)
+    {
+        var start = joinedOn > from ? joinedOn : from;
+        var end = leftOn is { } left && left.AddDays(1) < untilExclusive ? left.AddDays(1) : untilExclusive;
+        return Days(start, end)
+            .Where(d => !Employment.InGap(gaps, d))
+            .Select(d => (Day: d, Hours: calendar.HoursOn(d)))
+            .Where(d => d.Hours is not null)
+            .Select(d => new WorkingDay(d.Day, d.Hours!))
+            .ToList();
+    }
+
+    /// <summary>What there was to log on these days: each day's expected minutes (its whole span once the break counts).</summary>
+    public static int ExpectedOf(IEnumerable<WorkingDay> workingDays) => workingDays.Sum(d => d.Hours.Expected);
+
+    /// <summary>The expected minutes of the days among <paramref name="excusedDays"/>.</summary>
+    public static int ExcusedDaysOf(IEnumerable<WorkingDay> workingDays, IReadOnlySet<DateOnly> excusedDays)
+        => workingDays.Where(d => excusedDays.Contains(d.Day)).Sum(d => d.Hours.Expected);
+
+    /// <summary>The break taken on these days, which counts as worked once the break counts (0 before, and on excused days).</summary>
+    public static int BreaksTaken(IEnumerable<WorkingDay> workingDays, IReadOnlyList<Overtime.Split> work, IReadOnlySet<DateOnly> excusedDays)
+        => BreakDays(workingDays, work, excusedDays).Sum(d => d.Hours.BreakTaken(d.Normal));
+
+    /// <summary>The days whose break counts and aren't excused, with the normal minutes worked on each.</summary>
+    private static List<(WorkHours Hours, int Normal)> BreakDays(
+        IEnumerable<WorkingDay> workingDays,
+        IReadOnlyList<Overtime.Split> work,
+        IReadOnlySet<DateOnly> excusedDays)
+    {
+        var normalByDay = work.GroupBy(w => w.Day).ToDictionary(g => g.Key, g => g.Sum(w => w.Normal));
+        return workingDays
+            .Where(d => d.Hours.BreakCounts && !excusedDays.Contains(d.Day))
+            .Select(d => (d.Hours, Normal: normalByDay.GetValueOrDefault(d.Day)))
+            .ToList();
     }
 
     public static IEnumerable<DateOnly> Days(DateOnly from, DateOnly untilExclusive)

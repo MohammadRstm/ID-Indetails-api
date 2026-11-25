@@ -240,6 +240,12 @@ public static class NotificationKinds
     /// <summary>You logged less than a working day asked for (digest key <c>hours-missed-YYYY-MM-DD</c>, the day). The next morning, as a reminder.</summary>
     public const string HoursMissed = "hours_missed";
 
+    /// <summary>
+    /// An admin asked you to log your hours for this week (payload <c>senderName</c>, <c>weekStart</c>). At most one a day per
+    /// person, from anyone (key <c>hours-reminder-YYYY-MM-DD</c>), sent from the Not logging page of the Design dashboard.
+    /// </summary>
+    public const string HoursReminder = "hours_reminder";
+
     /// <summary>Who logged less than a working day asked for (digest key <c>hours-missed-list-YYYY-MM-DD</c>). The next morning, to whoever sees everyone's Design work.</summary>
     public const string HoursMissedList = "hours_missed_list";
 
