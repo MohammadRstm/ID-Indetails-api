@@ -20,7 +20,10 @@ public interface IFileService
     /// <summary>A voice note: WebM, Ogg or MP4 audio up to 10 MB, told apart from video by the caller. Otherwise as <see cref="UploadAsync"/>.</summary>
     Task<FileResponse> UploadVoiceAsync(Stream content, string? fileName, long uploadLength, CancellationToken cancellationToken = default);
 
-    /// <summary>A document for a work entry: PDF, Word, Excel, PowerPoint or CSV up to 25 MB, by its extension checked against its first bytes.</summary>
+    /// <summary>
+    /// Any other file, for a work entry or a chat: documents (PDF, Office, CSV, text), ZIP, CAD drawings and 3D models up
+    /// to 50 MB, by its extension checked against its first bytes. Never programs, web pages or scripts.
+    /// </summary>
     Task<FileResponse> UploadDocumentAsync(Stream content, string? fileName, long uploadLength, CancellationToken cancellationToken = default);
 
     /// <summary>

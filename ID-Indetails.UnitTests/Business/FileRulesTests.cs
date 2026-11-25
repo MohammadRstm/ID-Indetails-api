@@ -31,6 +31,19 @@ public class DocumentRulesTests
         FileRules.DetectDocument(null, "%PDF-1.4"u8).ShouldBeNull();
         FileRules.CheckSize(FileKind.Document, FileRules.MaxDocumentBytes + 1).ShouldNotBeNull();
         FileRules.KindOf("video/mp4").ShouldBe(FileKind.Video);
+        // photos and videos keep their own route
+        FileRules.DetectDocument("site.jpg", new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }).ShouldBeNull();
+    }
+
+    [Fact]
+    public void Drawings_3D_models_ZIP_and_text_are_files_too_never_taken_for_photos()
+    {
+        FileRules.DetectDocument("plan.dwg", "AC1032 drawing"u8)!.MimeType.ShouldBe("application/octet-stream");
+        FileRules.DetectDocument("model.glb", "glTF binary"u8)!.Kind.ShouldBe(FileKind.Document);
+        FileRules.DetectDocument("renders.zip", "PK zip"u8)!.MimeType.ShouldBe("application/zip");
+        FileRules.DetectDocument("notes.txt", "Meeting notes"u8)!.MimeType.ShouldBe("text/plain");
+        FileRules.KindOf("application/octet-stream").ShouldBe(FileKind.Document);
+        FileRules.MaxDocumentBytes.ShouldBe(50 * 1024 * 1024);
     }
 }
 
