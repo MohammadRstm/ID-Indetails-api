@@ -1,5 +1,6 @@
 using System.Text;
 using ID_Indetails.api.Business.Common;
+using ID_Indetails.api.Business.Portal;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
 
@@ -11,8 +12,9 @@ namespace ID_Indetails.api.Business.Files;
 /// <item>What a file is comes from its first bytes, never from its name or the type the browser claims.</item>
 /// <item>Voice notes (WebM, Ogg or MP4 audio, up to 10 MB) come in through their own route: WebM and MP4 audio look
 /// like video in their first bytes, so the caller says it is a voice note.</item>
-/// <item>Documents (PDF, Word, Excel, PowerPoint, CSV, up to 25 MB) come in through their own route too, for work
-/// entries: what they are comes from their extension, checked against their first bytes.</item>
+/// <item>Other files come in through their own route, for work entries and chats (25 November 2026): documents (PDF,
+/// Office, CSV, text), ZIP, CAD drawings and 3D models, up to 50 MB. What they are comes from their extension, checked
+/// against their first bytes; programs, web pages and scripts are never accepted.</item>
 /// <item>The stored name is only for display: path parts and unusual characters are dropped.</item>
 /// </list>
 /// </summary>
@@ -21,7 +23,10 @@ public static class FileRules
     public const long MaxImageBytes = 10 * 1024 * 1024;
     public const long MaxVideoBytes = 100 * 1024 * 1024;
     public const long MaxAudioBytes = 10 * 1024 * 1024;
-    public const long MaxDocumentBytes = 25 * 1024 * 1024;
+    public const long MaxDocumentBytes = 50 * 1024 * 1024;
+
+    /// <summary>How many leading bytes <see cref="DetectDocument"/> reads: some files show what they are a little way in.</summary>
+    public const int DocumentHeaderLength = PortalContentRules.HeaderLength;
 
     /// <summary>What one person may upload in a day, so nobody can fill the disk the database shares.</summary>
     public const long DailyBytesPerPerson = 2L * 1024 * 1024 * 1024;
@@ -47,7 +52,9 @@ public static class FileRules
         [".xls"] = ("application/vnd.ms-excel", b => b.AsSpan().StartsWith(Ole)),
         [".ppt"] = ("application/vnd.ms-powerpoint", b => b.AsSpan().StartsWith(Ole)),
         // plain text: no control characters but tabs and line breaks
-        [".csv"] = ("text/csv", b => b.Length > 0 && b.All(c => c >= 0x20 || c is 0x09 or 0x0A or 0x0D)),
+        [".csv"] = ("text/csv", IsPlainText),
+        [".txt"] = ("text/plain", IsPlainText),
+        [".zip"] = ("application/zip", b => b.AsSpan().StartsWith(Zip)),
     };
 
     /// <summary>The extensions a document may have, for the error message and the client's picker.</summary>
@@ -135,10 +142,26 @@ public static class FileRules
     public static Detected? DetectDocument(string? fileName, ReadOnlySpan<byte> header)
     {
         var extension = Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant();
-        return Documents.TryGetValue(extension, out var type) && type.Matches(header.ToArray())
-            ? new(FileKind.Document, type.MimeType, extension)
-            : null;
+        var bytes = header.ToArray();
+        if (Documents.TryGetValue(extension, out var type))
+        {
+            return type.Matches(bytes) ? new(FileKind.Document, type.MimeType, extension) : null;
+        }
+
+        // the drawings and 3D models a project's files take, checked the same way; photos and videos have their own route
+        var other = PortalContentRules.TypeOf(extension);
+        if (other is null || other.Preview is PortalPreview.Image or PortalPreview.Video
+            || other.ContentType.StartsWith("image/", StringComparison.Ordinal) && other.Extension is not ("dwg" or "dxf")
+            || other.ContentType.StartsWith("video/", StringComparison.Ordinal) || !PortalContentRules.MatchesContent(other, bytes))
+        {
+            return null;
+        }
+
+        // stored as a file, never as a picture: a drawing's "image/vnd.dwg" would be taken for a photo
+        return new(FileKind.Document, other.ContentType.StartsWith("image/", StringComparison.Ordinal) ? "application/octet-stream" : other.ContentType, extension);
     }
+
+    private static bool IsPlainText(byte[] b) => b.Length > 0 && b.All(c => c >= 0x20 || c is 0x09 or 0x0A or 0x0D);
 
     /// <summary>A stored file's kind, from the type found when it was uploaded.</summary>
     public static FileKind KindOf(string mimeType)
@@ -153,7 +176,7 @@ public static class FileRules
         {
             FileKind.Image => (MaxImageBytes, "Photos"),
             FileKind.Audio => (MaxAudioBytes, "Voice notes"),
-            FileKind.Document => (MaxDocumentBytes, "Documents"),
+            FileKind.Document => (MaxDocumentBytes, "Files"),
             _ => (MaxVideoBytes, "Videos"),
         };
         return sizeBytes > max ? RuleDenial.BusinessRule(ErrorCodes.FileTooLarge, $"{label} can be at most {max / 1024 / 1024} MB.") : null;

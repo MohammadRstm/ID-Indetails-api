@@ -42,23 +42,24 @@ public sealed class FileService(
     private const string NotFound = "File not found.";
 
     public Task<FileResponse> UploadAsync(Stream content, string? fileName, long uploadLength, CancellationToken cancellationToken = default)
-        => StoreAsync(content, fileName, uploadLength, header => FileRules.Detect(header),
+        => StoreAsync(content, fileName, uploadLength, FileRules.HeaderLength, header => FileRules.Detect(header),
             "Only photos (JPEG, PNG, WebP, HEIC) and videos (MP4, MOV, WebM) can be uploaded.", cancellationToken);
 
     public Task<FileResponse> UploadVoiceAsync(Stream content, string? fileName, long uploadLength, CancellationToken cancellationToken = default)
-        => StoreAsync(content, fileName, uploadLength, header => FileRules.DetectVoice(header),
+        => StoreAsync(content, fileName, uploadLength, FileRules.HeaderLength, header => FileRules.DetectVoice(header),
             "Voice notes can be WebM, Ogg or MP4 audio.", cancellationToken);
 
     public Task<FileResponse> UploadDocumentAsync(Stream content, string? fileName, long uploadLength, CancellationToken cancellationToken = default)
-        => StoreAsync(content, fileName, uploadLength, header => FileRules.DetectDocument(fileName, header),
-            "Documents can be PDF, Word, Excel, PowerPoint or CSV files.", cancellationToken);
+        => StoreAsync(content, fileName, uploadLength, FileRules.DocumentHeaderLength, header => FileRules.DetectDocument(fileName, header),
+            "This kind of file can't be sent: documents (PDF, Office, text), ZIP, drawings and 3D models can, never programs or web pages.", cancellationToken);
 
+    /// <param name="headerLength">How many of its first bytes <paramref name="detect"/> looks at.</param>
     /// <param name="detect">What the file is, from its first bytes; null when this route doesn't take it.</param>
     private async Task<FileResponse> StoreAsync(
-        Stream content, string? fileName, long uploadLength, Func<byte[], FileRules.Detected?> detect, string refused, CancellationToken cancellationToken)
+        Stream content, string? fileName, long uploadLength, int headerLength, Func<byte[], FileRules.Detected?> detect, string refused, CancellationToken cancellationToken)
     {
         var me = await ActiveAsync(cancellationToken);
-        var header = new byte[FileRules.HeaderLength];
+        var header = new byte[headerLength];
         var read = await content.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false, cancellationToken);
         var detected = detect(header[..read]) ?? throw new BusinessRuleException(ErrorCodes.FileTypeNotAllowed, refused);
         // the upload's length (the file and its small envelope) is checked before anything is stored

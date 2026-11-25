@@ -273,7 +273,7 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
     private static readonly byte[] Xlsx = [0x50, 0x4B, 0x03, 0x04, .. new byte[40]];
 
     [Fact]
-    public async Task A_work_entry_takes_a_document_its_author_and_reviewers_open_but_a_chat_refuses_it()
+    public async Task A_work_entry_takes_a_document_its_author_and_reviewers_open()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, anna) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
@@ -300,7 +300,34 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         opened.Content.Headers.ContentType!.MediaType.ShouldBe("application/pdf");
         (await opened.Content.ReadAsByteArrayAsync()).ShouldBe(Pdf);
 
-        await (await Client.PostJsonAsync($"/api/messages/direct/{superAdmin.User.Id}", new { body = "", attachmentIds = new[] { sheet.Id } }, anna.AccessToken))
+    }
+
+    [Fact]
+    public async Task Chats_and_Announcements_take_files_which_everyone_in_them_downloads()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, anna) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+
+        // a PDF in Announcements, and a ZIP and a drawing in a direct chat
+        var notice = await (await UploadAsync(Client, Pdf, "Holiday schedule.pdf", superAdmin.AccessToken, "/api/files/document")).ReadAsync<FileResponse>();
+        (await Client.PostJsonAsync("/api/messages/announcements", new { body = "This year's holidays", attachmentIds = new[] { notice.Id } }, superAdmin.AccessToken))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+        var opened = await Client.GetAsync($"/api/files/{notice.Id}", anna.AccessToken);
+        opened.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await opened.Content.ReadAsByteArrayAsync()).ShouldBe(Pdf);
+
+        var zip = await (await UploadAsync(Client, Xlsx, "renders.zip", anna.AccessToken, "/api/files/document")).ReadAsync<FileResponse>();
+        (zip.Kind, zip.MimeType).ShouldBe((FileKind.Document, "application/zip"));
+        byte[] dwg = [.. Encoding.ASCII.GetBytes("AC1032"), .. new byte[40]];
+        var drawing = await (await UploadAsync(Client, dwg, "Ground floor.dwg", anna.AccessToken, "/api/files/document")).ReadAsync<FileResponse>();
+        (drawing.Kind, drawing.MimeType, drawing.Name).ShouldBe((FileKind.Document, "application/octet-stream", "Ground floor.dwg"));
+        (await Client.PostJsonAsync($"/api/messages/direct/{superAdmin.User.Id}", new { body = "", attachmentIds = new[] { zip.Id, drawing.Id } }, anna.AccessToken))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        // never a program or a web page, whatever it is called
+        byte[] program = [0x4D, 0x5A, 0x90, 0x00, .. new byte[40]];
+        await (await UploadAsync(Client, program, "setup.zip", anna.AccessToken, "/api/files/document")).ShouldFailWithAsync(422, ErrorCodes.FileTypeNotAllowed);
+        await (await UploadAsync(Client, Encoding.ASCII.GetBytes("<html><script>x</script></html>"), "page.html", anna.AccessToken, "/api/files/document"))
             .ShouldFailWithAsync(422, ErrorCodes.FileTypeNotAllowed);
     }
 
