@@ -171,6 +171,9 @@ Rules (`Business/Meetings/MeetingRules.cs`):
 | `GET /api/reports/work?from=&to=&projectId=&userId=&clientId=&internal=` | `report:view` | The Reports page for a range of company days (default: this quarter so far; at most three years). `clientId` keeps one client's projects, `internal=true` the projects with no client. `quarterly` (the last 6 quarters by company day) is added up by the database |
 | `GET /api/reports/overview?period=quarter\|month\|last30\|custom` | `report:view` | The Design dashboard for a period and the one before it. `custom` takes `from` and `to` (at most three years; `to` after today counts to today) and compares with as many days just before |
 | `GET /api/reports/utilization?month=` | `report:view` | How much of their expected hours each Design employee and department logged in a month, with excused hours, overtime and each person's project mix. Hours only (see "Utilization" below). `month` is any day of the month, this month when left out; a future month is `400 validation_failed` |
+| `GET /api/reports/not-logging` | `report:view` | The Design employees who have logged no work this week, with their hours so far (see "The Not logging page" below) |
+| `POST /api/reports/not-logging/{userId}/reminder` | `report:view` | Asks one of them to log their hours: a `hours_reminder` notification. `404` if they are not a Design person; `409 logged_this_week` if they have logged work this week; `409 already_reminded` if anyone reminded them today |
+| `POST /api/reports/not-logging/reminders` | `report:view` | Reminds everyone on the list who was not reminded today. Returns `{ reminded, skipped }`; nobody to remind is `{ reminded: 0, skipped }`, not an error |
 
 Callers who can't see Design (an Execution admin holds `report:view` too) get `404`. Money is only included for callers with `financial:view`, and comes from the shared finance calculator. Utilization never has money.
 
@@ -196,6 +199,19 @@ Callers who can't see Design (an Execution admin holds `report:view` too) get `4
   - `people[]`, by name: `userId`, `name`, `department`, `hours`, and `projects[]`, the project mix: each project's `projectId`, `title`, `minutes` and `share` of the person's logged minutes (a fraction), the most first.
 - **Never pay.** The shortfall, which overtime made up missing hours (`madeUpMinutes`), the overtime paid, the hours balance and any money are pay information and stay out ([company.md](company.md)).
 - **Who sees per-person hours (owner decision, 11 Nov 2026):** holders of `report:view` (admins and super admins by default) see each Design employee's logged, expected and excused hours, overtime and project mix here, with no pay figure. Until then a person's expected hours were `salary:view` only. These stay `salary:view` only: the hours ledger (`GET /api/employees/{userId}/hours`: the balance, shortfall and made-up hours), `madeUpMinutes` and `paidMinutes` on a person's overtime, Salaries and Project pay.
+
+### The Not logging page
+
+The dashboard's "not logging" attention item has a page behind it (`Services/Reports/Implementation/NotLoggingService.cs`, rules in `Business/Reports/NotLoggingRules.cs`). It needs `report:view` and Design, like the dashboard: anyone else gets `404` (or `403` without `report:view`).
+
+- **Who is listed:** active Design people whose role is employee and who have logged no work since the start of this week (the company calendar's first day of the week, to today). `NotLoggingRules.Of` is the one place that chooses them, used by the dashboard's count too, so the count and the page never differ. By name.
+- **`GET /api/reports/not-logging`** returns `weekStart`, `today` and `people[]`: `id`, `name`, `email`, `photoFileId`, `loggedMinutes`, `expectedMinutes`, `overtimeMinutes` and `remindedToday`.
+  - The three minutes figures are colleagues' hours: they are `null` unless the caller also holds `work_entry:view_all`.
+  - They come from the hours ledger's calculators, for the days from `weekStart` to today (a week can span two months): `overtimeMinutes` is the overtime of the work logged those days; `loggedMinutes` is that work plus the break taken on days where the break counts; `expectedMinutes` is what the ledger expects of the working days they were employed (`HoursLedger.WorkingDaysIn`), less excused days and time off. From 1 December 2026 the break counts, so a 9 to 5 expects 8 hours a day and a full 9 to 5 is not overtime; before, it expects 7. A month that has no ledger for the person (paid as a fixed salary) counts nothing.
+- **Reminders:** `POST /api/reports/not-logging/{userId}/reminder` and `POST /api/reports/not-logging/reminders` send a `hours_reminder` notification ([notifications.md](notifications.md)): "{sender} wants you to log your hours for this week now." Both return `{ reminded, skipped }`.
+  - One person: `404` if they are not an active Design employee; `409 logged_this_week` ("{name} has already logged work this week.") if they are not on today's list; `409 already_reminded` ("{name} has already been reminded today.") if anyone reminded them today.
+  - Everyone: reminds each person on the list not yet reminded today; `skipped` counts those who were. Nobody to remind is `{ reminded: 0, skipped }`.
+- **Once a day, from anyone:** each reminder is sent with the key `hours-reminder-{company day}` (`INotificationSender.SendOnceAsync`), which stores a `NotificationSentKey` per person. Those keys are not deleted with the old notifications (only notifications are, after a week), and `remindedToday` and the `409` read them. If two admins remind the same person at the same moment, the key's primary key refuses the second: `409 already_reminded`.
 
 ## Activity feed
 
