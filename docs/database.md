@@ -227,6 +227,8 @@ The `ProjectColors` migration (17 Nov 2026) only moves data: every project witho
 
 The `ProjectPalette` migration (18 Nov 2026) only moves data: every project gets a colour of the new thirty-colour palette ([projects.md](projects.md#colours)), replacing the sixteen colours and any picked on the old colour wheel. Each business on its own, its active and on-hold projects first, oldest first, so up to thirty differ; the palette is walked seven at a time so neighbours differ a lot. No column changes; `Down` keeps the new colours.
 
+The `TimeOffHours` migration (26 Nov 2026) adds `work_entries.time_off_overtime` (tinyint(1), not null, default 0): hours on a day of time off that a super admin approved as overtime, every minute of them overtime ([time-off.md](time-off.md), "Hours and time off"). Every existing entry is 0. It also adds `work_entry_time_off` to `ck_blocked_changes_kind`, for hours waiting for that approval. `Down` deletes those blocked changes, restores the check and drops the column.
+
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.
 
 ## Who connects
