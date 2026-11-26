@@ -321,6 +321,9 @@ public static class ErrorCodes
     /// <summary>422. Someone on time off can't log or change any hours until it's over.</summary>
     public const string OnTimeOff = "on_time_off";
 
+    /// <summary>422. Changing time off's days would add a day that already holds hours.</summary>
+    public const string TimeOffHoursLogged = "time_off_hours_logged";
+
     // Salary advances
     /// <summary>422. The person has no pay set today, so there is nothing an advance could come off.</summary>
     public const string SalaryAdvanceNoPay = "salary_advance_no_pay";

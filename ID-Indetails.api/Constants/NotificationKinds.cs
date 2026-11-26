@@ -136,6 +136,9 @@ public static class NotificationKinds
     /// <summary>Your approved time off was taken back from today (subject: the request).</summary>
     public const string TimeOffRejected = "time_off_rejected";
 
+    /// <summary>A super admin changed the days of your approved time off, or whether it is paid (subject: the request).</summary>
+    public const string TimeOffChanged = "time_off_changed";
+
     /// <summary>Someone who was off is back at work today: their time off was taken back (subject: them). To their department and the super admins.</summary>
     public const string TimeOffBack = "time_off_back";
 

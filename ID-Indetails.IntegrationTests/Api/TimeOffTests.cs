@@ -197,6 +197,70 @@ public class TimeOffTests(ApiFactory api) : IClassFixture<ApiFactory>
             .ShouldFailWithAsync(422, ErrorCodes.TimeOffNotApproved);
     }
 
+    private Task<HttpResponseMessage> ChangeAsync(AuthResponse caller, long id, DateOnly first, DateOnly last, bool isPaid = true, string reason = "Was off from Tuesday")
+        => Client.PostJsonAsync($"/api/time-off/{id}/change", new { firstDay = first, lastDay = last, isPaid, reason }, caller.AccessToken);
+
+    [Fact]
+    public async Task A_super_admin_moves_approved_time_off_into_the_past_and_the_employee_is_told()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var asked = await AskAsync(employee);
+        await ApproveAsync(superAdmin, asked.Id);
+
+        ((int)(await ChangeAsync(employee, asked.Id, Today.AddDays(-4), asked.LastDay)).StatusCode).ShouldBe(403);
+        await (await ChangeAsync(superAdmin, asked.Id, Today.AddDays(-4), asked.LastDay, reason: " ")).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        await (await ChangeAsync(superAdmin, asked.Id, asked.FirstDay, asked.LastDay)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+
+        var changed = await OkAsync<TimeOffResponse>(ChangeAsync(superAdmin, asked.Id, Today.AddDays(-4), Today.AddDays(1), isPaid: false));
+        changed.Status.ShouldBe(TimeOffStatus.Approved);
+        (changed.FirstDay, changed.LastDay, changed.IsPaid).ShouldBe((Today.AddDays(-4), Today.AddDays(1), (bool?)false));
+        changed.DaysTaken.ShouldBe(changed.WorkingDays);
+
+        var note = (await OfKindAsync(employee, NotificationKinds.TimeOffChanged)).ShouldHaveSingleItem();
+        note.Payload!.Value.GetProperty("reason").GetString().ShouldBe("Was off from Tuesday");
+        note.Payload!.Value.GetProperty("previousFirstDay").GetString().ShouldBe(asked.FirstDay.ToString("yyyy-MM-dd"));
+        var activity = await _steps.ScalarAsync<string>(
+            "SELECT payload FROM activity_events WHERE kind = 'time_off_changed' AND subject_id = @u", ("@u", employee.User.Id));
+        activity.ShouldContain("Was off from Tuesday");
+        activity.ShouldContain(asked.FirstDay.ToString("yyyy-MM-dd"));
+
+        (await OkAsync<List<TimeOffResponse>>(Client.GetAsync("/api/me/time-off", employee.AccessToken)))
+            .ShouldHaveSingleItem().FirstDay.ShouldBe(Today.AddDays(-4));
+        (await OkAsync<List<AwayResponse>>(Client.GetAsync("/api/time-off/away", employee.AccessToken)))
+            .ShouldContain(a => a.UserId == employee.User.Id && a.FirstDay == Today.AddDays(-4));
+
+        var pending = await AskAsync(employee, daysAhead: 30);
+        await (await ChangeAsync(superAdmin, pending.Id, Today.AddDays(30), Today.AddDays(31))).ShouldFailWithAsync(422, ErrorCodes.TimeOffNotApproved);
+    }
+
+    [Fact]
+    public async Task New_days_never_hold_hours_other_time_off_or_hand_excuses()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var logged = Today.AddDays(-3);
+        await Work.InsertAsync(employee.User.Id, project.Id, $"{logged:yyyy-MM-dd} 07:00:00", $"{logged:yyyy-MM-dd} 08:00:00");
+        var asked = await AskAsync(employee);
+        await ApproveAsync(superAdmin, asked.Id);
+
+        var hours = await (await ChangeAsync(superAdmin, asked.Id, logged, asked.LastDay)).ShouldFailWithAsync(422, ErrorCodes.TimeOffHoursLogged);
+        hours.Message.ShouldContain(logged.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture));
+
+        var later = await AskAsync(employee, daysAhead: 30);
+        await ApproveAsync(superAdmin, later.Id);
+        await (await ChangeAsync(superAdmin, asked.Id, asked.FirstDay, Today.AddDays(31))).ShouldFailWithAsync(422, ErrorCodes.TimeOffOverlaps);
+
+        var excused = Today.AddDays(-1);
+        (await Client.PostJsonAsync($"/api/employees/{employee.User.Id}/hour-excuses",
+                new { month = excused.ToString("yyyy-MM"), kind = "days", days = new[] { excused }, isPaid = true }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        await (await ChangeAsync(superAdmin, asked.Id, excused, asked.LastDay)).ShouldFailWithAsync(422, ErrorCodes.TimeOffExcused);
+
+        (await OkAsync<TimeOffResponse>(ChangeAsync(superAdmin, asked.Id, Today, asked.LastDay))).FirstDay.ShouldBe(Today);
+    }
+
     [Fact]
     public async Task The_schedule_expires_undecided_requests_and_tells_the_department_once()
     {

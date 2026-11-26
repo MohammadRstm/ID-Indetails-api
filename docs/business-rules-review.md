@@ -173,6 +173,7 @@ The client asked for time off requests. The full rules are in [time-off.md](time
 | T11 | **Leaving, moving out of Design or becoming an admin ends time off.** Pending requests are cancelled; approved time off stops that day, keeping the days already taken; the super admins are told. |
 | T12 | **A Design admin needs a department**, like a Design employee, so a department's admins hear when its people are off. There is no backfill: an admin without one is asked for it on their next edit, and a role change can give one (`teamId`). |
 | T13 | **Proton doesn't cover time off yet.** The write endpoints are listed as opened for the user; hours are still blocked for Proton, since it logs through the same service. |
+| T14 | **Super admins correct approved time off** (decided 26 Nov 2026): its days and whether it is paid, coming up, under way or over, past days and closed months included. A reason is required (kept in the activity feed and sent to the employee). The new days can't touch the person's other time off, a day excused by hand, or add a day holding hours. |
 
 ## Open questions
 

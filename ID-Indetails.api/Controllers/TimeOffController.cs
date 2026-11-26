@@ -34,6 +34,12 @@ public sealed class TimeOffController(ITimeOffService timeOff) : ControllerBase
     public Task<TimeOffResponse> Reject(long id, TimeOffNoteRequest request, CancellationToken cancellationToken)
         => timeOff.RejectAsync(id, request, cancellationToken);
 
+    /// <summary>Corrects approved time off: its days, past ones included, and whether it is paid.</summary>
+    [HttpPost("{id:long}/change")]
+    [HasPermission(PermissionCodes.TimeOffDecide)]
+    public Task<TimeOffResponse> Change(long id, ChangeTimeOffRequest request, CancellationToken cancellationToken)
+        => timeOff.ChangeAsync(id, request, cancellationToken);
+
     /// <summary>Who is off and until when: never why, nor whether it is paid.</summary>
     [HttpGet("away")]
     [Authorize]
