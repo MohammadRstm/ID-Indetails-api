@@ -119,13 +119,35 @@ public class TimeOffRulesTests
     }
 
     [Fact]
-    public void No_hours_land_on_a_day_off_and_nobody_changes_hours_while_off()
+    public void Hours_logged_for_someone_never_land_on_a_day_off()
     {
         IReadOnlyList<Period> periods = [Approved(9, 13)];
         TimeOffRules.CheckEntryDays([new(2026, 11, 6)], periods).ShouldBeNull();
         TimeOffRules.CheckEntryDays([new(2026, 11, 6), new(2026, 11, 10)], periods)!.Code.ShouldBe(ErrorCodes.TimeOffDay);
-        TimeOffRules.CheckNotOff(Today, periods)!.Code.ShouldBe(ErrorCodes.OnTimeOff);
-        TimeOffRules.CheckNotOff(new(2026, 11, 14), periods).ShouldBeNull();
+    }
+
+    [Fact]
+    public void Only_hours_newly_put_on_a_day_off_wait_for_approval()
+    {
+        IReadOnlyList<Period> periods = [Approved(9, 13)];
+        DateOnly Nov(int day) => new(2026, 11, day);
+        TimeOffRules.EntryDays New(params int[] days) => new([], days.Select(Nov).ToList());
+        TimeOffRules.EntryDays Moved(int from, int to) => new([Nov(from)], [Nov(to)]);
+
+        // off today, hours on any other day go as always, a reopened past month included
+        TimeOffRules.NewDayOff([New(6)], periods).ShouldBeNull();
+        TimeOffRules.NewDayOff([New(2), New(14)], periods).ShouldBeNull();
+
+        // new hours on a day off, or an entry moved onto one: the first such day
+        TimeOffRules.NewDayOff([New(11), New(10)], periods).ShouldBe(Nov(10));
+        TimeOffRules.NewDayOff([Moved(6, 12)], periods).ShouldBe(Nov(12));
+        TimeOffRules.NewDayOff([New(8, 9)], periods).ShouldBe(Nov(9));
+
+        // hours already there (approved) are changed freely, and so are those moved off it
+        TimeOffRules.NewDayOff([Moved(10, 10)], periods).ShouldBeNull();
+        TimeOffRules.NewDayOff([Moved(10, 6)], periods).ShouldBeNull();
+        TimeOffRules.AnyOff([Nov(13)], periods).ShouldBeTrue();
+        TimeOffRules.AnyOff([Nov(14)], periods).ShouldBeFalse();
     }
 
     [Fact]

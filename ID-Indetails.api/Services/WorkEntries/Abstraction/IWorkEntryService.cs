@@ -12,6 +12,12 @@ public interface IWorkEntryService
     /// </summary>
     bool LetOutsideDepartment { get; set; }
 
+    /// <summary>
+    /// Set while hours on a day of the person's time off are replayed after a super admin approved them: true as overtime,
+    /// false as normal hours. Null otherwise, when such hours wait for approval (or are refused, when logged for someone).
+    /// </summary>
+    bool? DayOffApproval { get; set; }
+
     Task<WorkEntryResponse> CreateAsync(SaveWorkEntryRequest request, CancellationToken cancellationToken = default);
 
     Task<WorkEntryResponse> UpdateAsync(long id, SaveWorkEntryRequest request, CancellationToken cancellationToken = default);

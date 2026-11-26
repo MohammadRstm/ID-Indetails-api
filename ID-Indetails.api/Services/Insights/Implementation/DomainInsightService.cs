@@ -128,9 +128,9 @@ public sealed class DomainInsightService(
         var money = projects.Count == 0
             ? new Dictionary<long, ProjectFinancials>()
             : await finance.GetAsync(projects, cancellationToken);
-        // a change kept until a department is added to the project isn't a money risk
+        // hours kept until a department is added to the project, or for a day of time off, aren't a money risk
         var pending = (await blockedChanges.PendingAsync(projects.Select(p => p.Id).ToList(), cancellationToken))
-            .Where(c => c.Kind != BlockedChangeKind.WorkEntryDepartment)
+            .Where(c => c.Kind is not (BlockedChangeKind.WorkEntryDepartment or BlockedChangeKind.WorkEntryTimeOff))
             .ToLookup(c => c.ProjectId, c => clock.ToCompanyDate(c.RequestedAt));
 
         var found = new List<(long ProjectId, IReadOnlyList<ProjectRiskRules.Risk> Risks)>();

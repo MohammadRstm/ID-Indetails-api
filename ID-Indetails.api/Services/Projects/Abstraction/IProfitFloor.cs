@@ -33,7 +33,11 @@ public sealed record ProfitBefore(Project Project, decimal? Profit);
 /// <summary>A guarded request with its route ids, kept as JSON when the floor refuses it.</summary>
 /// <param name="ItemId">The site expense or work entry it changes, when it changes one.</param>
 /// <param name="WeekStart">A labour week's first day.</param>
-public sealed record BlockedRequest<T>(long ProjectId, T Request, long? ItemId = null, DateOnly? WeekStart = null);
+/// <param name="DayOffOvertime">
+/// Hours on a day of time off a super admin already approved (true as overtime, false as normal hours) that were kept
+/// again for something else, its department or the profit floor: replaying them keeps that approval.
+/// </param>
+public sealed record BlockedRequest<T>(long ProjectId, T Request, long? ItemId = null, DateOnly? WeekStart = null, bool? DayOffOvertime = null);
 
 /// <summary>
 /// A held pay change, as its blocked change keeps it: the person, the request, every project it takes to zero profit
@@ -50,13 +54,19 @@ public interface IBlockedChangeRecorder
     Task RecordAsync(BlockedChangeException refused, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Refused changes: read, forced through once, or dismissed, by whoever sees the project's money.</summary>
+/// <summary>
+/// Refused changes: read, forced through once, or dismissed, by whoever sees the project's money. Hours on a day of time
+/// off are decided by whoever decides time off.
+/// </summary>
 public interface IBlockedChangeService
 {
     Task<BlockedChangeResponse> GetAsync(long id, CancellationToken cancellationToken = default);
 
-    /// <summary>Replays the refused change past the floor, once.</summary>
-    Task<BlockedChangeResponse> ForceAsync(long id, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Replays the refused change past the floor, once. Hours on a day of time off need <paramref name="asOvertime"/>:
+    /// they are approved as overtime or as normal hours, and still go through the profit floor.
+    /// </summary>
+    Task<BlockedChangeResponse> ForceAsync(long id, bool? asOvertime = null, CancellationToken cancellationToken = default);
 
     Task<BlockedChangeResponse> DismissAsync(long id, CancellationToken cancellationToken = default);
 }

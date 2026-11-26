@@ -85,7 +85,7 @@ public sealed class PayrollInputs(
                 months.Min().AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
                 months.Max().AddMonths(1).AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
                 cancellationToken))
-            .Select(e => (e.UserId, Local: clock.ToCompanyTime(e.StartedAt), e.Id, e.Minutes))
+            .Select(e => (e.UserId, Local: clock.ToCompanyTime(e.StartedAt), e.Id, e.Minutes, e.TimeOffOvertime))
             .ToLookup(e => (e.UserId, Month: new DateOnly(e.Local.Year, e.Local.Month, 1)));
 
         var result = new List<PersonMonth>();
@@ -108,7 +108,7 @@ public sealed class PayrollInputs(
                     terms,
                     calendar,
                     work[(person.Id, month)]
-                        .Select(e => new Overtime.Work(e.Id, DateOnly.FromDateTime(e.Local), (int)e.Local.TimeOfDay.TotalMinutes, e.Minutes))
+                        .Select(e => new Overtime.Work(e.Id, DateOnly.FromDateTime(e.Local), (int)e.Local.TimeOfDay.TotalMinutes, e.Minutes, e.TimeOffOvertime))
                         .ToList(),
                     monthExcuses.Select(x => new SalaryCalculator.Excuse(x.Kind, x.Minutes, x.Days.Select(d => d.Day).ToList(), x.IsPaid))
                         .Concat(TimeOffRules.ExcusesIn(month, monthTimeOff))

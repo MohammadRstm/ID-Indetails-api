@@ -1,6 +1,6 @@
 # Time off
 
-Design employees ask for whole days off ahead of time. Any super admin approves the request, with pay or without, or declines it. While someone is off, no hours land on their days, their department and the super admins hear about it, and the super admins are alerted if the person logs hours or uses the app.
+Design employees ask for whole days off ahead of time. Any super admin approves the request, with pay or without, or declines it. While someone is off, hours they log on their days off wait for a super admin's approval, their department and the super admins hear about it, and the super admins are alerted if the person uses the app.
 
 The rules are in `Business/TimeOff/TimeOffRules.cs`. The requests are handled by `Services/TimeOff/Implementation/TimeOffService.cs`, what time off means elsewhere (hours, meetings, alerts, leaving) by `TimeOffWatch.cs`, and the scheduled part by `TimeOffSchedule.cs`. Added on 9 Nov 2026 (migration `TimeOff`).
 
@@ -51,7 +51,7 @@ Who holds the permissions: `time_off:request` is limited to Design and held by e
 **The days.**
 - It starts tomorrow at the earliest (`400 time_off_too_soon`) and its first day is at most 6 months ahead (`400 time_off_too_far`). It may span months; there is no yearly allowance.
 - It must hold at least one of the person's working days, from their schedule or the company week (`400 time_off_no_working_day`).
-- Every calendar day from the first to the last counts as "off": the flag, the hour block, the alerts and the meeting block. Pay and `daysTaken` count only the working days.
+- Every calendar day from the first to the last counts as "off": the flag, the hours held for approval, the alerts and the meeting block. Pay and `daysTaken` count only the working days.
 - A request can't overlap the person's own pending or approved time off (`422 time_off_overlaps`), nor a day already excused in their hours (a day excuse, or a month excused whole; `422 time_off_excused`). Declined, withdrawn, expired, cancelled, rejected and ended requests don't block a new one.
 
 **Deciding.**
@@ -80,15 +80,19 @@ Who holds the permissions: `time_off:request` is limited to Design and held by e
 - Rejected before the first day, no day is taken at all.
 - The employee is told (`time_off_rejected`). If it was under way (its first day has come), the department and the super admins hear that the person is back (`time_off_back`).
 
-**The hour block** (`TimeOffWatch.CheckHoursAsync`, called by `WorkEntryService`). Two rules, both `422`:
-- No hours can be dated on a day of time off: not a new entry, an edit, a move of another entry, nor a restore (`time_off_day`).
-- While the person is off today and changes hours themselves, they can add, edit, move, delete or restore none (`on_time_off`), whatever days the change is about.
+**Hours and time off** (decided 26 Nov 2026, `WorkEntryService` with `TimeOffRules.NewDayOff`). Until then someone off today could change no hours at all (`on_time_off`), which stopped them catching up on a month a super admin had reopened; that rule is gone.
+- **Every other day takes hours as always**, time off or not: while off, the person logs, edits, moves, deletes and restores hours on any day that isn't part of their time off, under every other rule (closed months unless reopened, no future time, the edit window, overlaps, departments, the profit floor; [design.md](design.md)).
+- **Hours put on a day of their own time off wait for approval** instead of being refused: a new entry there, or an edit or move that puts an entry onto one (the timeline's `moves` included). The whole save is kept as a blocked change of kind `work_entry_time_off` (the request as sent, with the entry's id for an edit), after every other check has passed, and the person gets `422 time_off_hours_held` with `blockedChangeId`: "<day> is a day of your time off. Your hours wait for approval." Until decided they hold their time like logged hours (no overlap with them) and show in their day (`GET /api/me/day`, `waiting[]` with `dayOff: true`).
+- **The super admins decide** (holders of `time_off:decide`, as for time off itself): they are told (`time_off_hours`, subject the blocked change), and only they read or decide it (`404` for anyone else, `financial:view` or not). From the held change (`POST /api/blocked-changes/{id}/force` with `{ asOvertime }`, required here, `400` without it, or `/dismiss`):
+  - **Approve as overtime:** the hours are logged as the person, and the entry is marked `time_off_overtime`: every minute of it is overtime, paid at the overtime rate under the month's threshold ([company.md](company.md), "The overtime threshold"). It takes no share of the paid break.
+  - **Approve as normal hours:** logged as the person, as plain normal hours (counted in their work and the project's labour like any other hour, the overtime threshold included). The day off stays as it was, paid or unpaid.
+  - **Decline:** nothing is logged.
 
-When hours are logged for the person rather than by them (`ICurrentUser.IsActing`: the parked hours released when an admin adds a department, and a blocked change a super admin forces through, replayed as the person), only the first rule applies. Those hours still go through for days outside the time off, with no alert.
+  The person is told either way (`time_off_hours_decided`, with `approved` and `asOvertime`). Approving doesn't skip the other checks: the hours still go through the profit floor and their department. If one of those keeps them now, they are kept as that kind of blocked change, with the approval carried in its payload (`dayOffOvertime`), so they need no second one, and the person hears they were approved but still wait (`waiting: true`). A change that no longer fits at all (it overlaps newer hours, the month closed) is pending again and the error returned, as for any blocked change.
+- **Afterwards nothing needs approval:** an entry already on a day off (approved, or there before the time off was granted) is edited, deleted and restored freely, keeps its overtime mark while it stays on a day off, and loses it if moved off. Moving an entry from a normal day onto a day off counts as new hours there and is held. (The owner may revisit this.)
+- **Logged for the person rather than by them** (`ICurrentUser.IsActing`: the parked hours released when a department is added, or another kind of blocked change forced through), hours newly on a day off are refused (`422 time_off_day`) unless they carry an approval.
 
-**Alerts to the super admins.** Each links to the People page filtered to the person (`GET /api/employees?id=`), where their sessions can be ended. Both are saved and sent on their own before the request that caused them fails, so a refused request still alerts. Neither names the reason or whether it is paid.
-- `time_off_hours`: the person, off today, tried to log or change hours. At most once an hour per request (key `time-off-hours-{requestId}-{yyyyMMddHH}`, company time).
-- `time_off_online`: the person, off today, used the app. At most once a day per request (key `time-off-online-{requestId}-{yyyyMMdd}`). It is sent from `LastSeenMiddleware` when it records "last seen" (at most every 5 minutes per person); a failure there never fails the request.
+**Alerts to the super admins.** `time_off_online`: the person, off today, used the app. At most once a day per request (key `time-off-online-{requestId}-{yyyyMMdd}`). It links to the People page filtered to the person (`GET /api/employees?id=`), where their sessions can be ended, and never names the reason or whether it is paid. It is sent from `LastSeenMiddleware` when it records "last seen" (at most every 5 minutes per person); a failure there never fails the request.
 
 **Heads-up.** On the first day, at the first scheduled run (from 00:00 company time), `time_off_starts` goes to every active person in the person's department (employees and admins) plus every super admin, never the person themselves. A department with no admin tells nobody extra. It is sent once per request (key `time-off-starts-{requestId}`) and only while the time off is approved and under way. The payload holds the name and last day only. The back notice (`time_off_back`) goes to the same people.
 
@@ -112,7 +116,7 @@ Granted time off (approved, rejected or ended) feeds pay as **day excuses**, one
 - A paid day changes nothing on the salary, and an unpaid day deducts the full paid day.
 - It is a company cost and is never charged to a project.
 
-Differences from an excuse by hand: time off may be for a future month, it has a status, and it is decided by request.
+Differences from an excuse by hand: time off may be for a future month, it has a status, and it is decided by request. Hours logged on a day off don't take that day off the time off (unlike a hand excuse, which gives way to work): approved as overtime they are paid as overtime on top; approved as normal hours they count like any other hour, and the day stays paid or unpaid as approved.
 
 Salary detail (`GET /api/company/salaries/{userId}`) carries `timeOff` (each request touching the month: `requestId`, `firstDay`, `lastDay`, `isPaid`, `days`: its working days in the month) and `timeOffPay`. `GET /api/me/hours` carries the same `timeOff` list per month. Both are read-only: time off is decided on the Time off page, not on Salaries.
 
@@ -141,7 +145,8 @@ Notification kinds (all in the `people` push category, [notifications.md](notifi
 | `time_off_back` | The person's department and the super admins | Time off under way was rejected, or changed so they are no longer off today |
 | `time_off_ended` | Super admins | Cancelled or cut short: they left, moved out of Design or became an admin |
 | `time_off_online` | Super admins | Someone on time off used the app, once a day |
-| `time_off_hours` | Super admins | Someone on time off tried to change hours, once an hour |
+| `time_off_hours` | Super admins | Someone logged hours on a day of their time off: they wait for approval (subject: the blocked change). Until 26 Nov 2026 it alerted that someone off tried to log hours |
+| `time_off_hours_decided` | The employee | Their hours on a day off were approved, as overtime or not, or turned down |
 
 The six sent to super admins (`requested`, `undecided`, `withdrawn`, `ended`, `online`, `hours`) are only listed and openable while the reader holds `time_off:decide` (`NotificationAccess`).
 
@@ -170,8 +175,8 @@ Every notification is keyed, so running twice sends once.
 | `time_off_not_approved` | 422 | Rejecting or changing something that isn't approved |
 | `time_off_hours_logged` | 422 | Changing the days would add a day that already holds hours |
 | `time_off_over` | 422 | Rejecting after its last day |
-| `time_off_day` | 422 | Hours dated on a day of time off |
-| `on_time_off` | 422 | The person is off today and tried to change hours |
+| `time_off_hours_held` | 422 | Hours put on a day of the person's own time off: kept, waiting for a super admin (`blockedChangeId` in the body) |
+| `time_off_day` | 422 | Hours logged for the person (released or forced) newly on a day of their time off, with no approval |
 | `meeting_attendee_off` | 422 | Putting someone in a meeting on a day they are off |
 | `excuse_on_time_off` | 422 | Excusing a day of time off by hand, or a month holding some whole |
 | `department_required` | 400 | A Design admin or employee given no department ([employees.md](employees.md)) |
@@ -182,4 +187,4 @@ Every notification is keyed, so running twice sends once.
 
 ## Proton
 
-Not covered yet (the user's decision, 9 Nov 2026). The six write endpoints (with changing days, 26 Nov 2026) are `Open` entries in `ProtonCoverage` (Proton points to the page), and Proton has no read tool for time off. Proton is still blocked from logging hours on a day off or during time off, because it goes through the same `WorkEntryService`. See [proton.md](proton.md).
+Not covered yet (the user's decision, 9 Nov 2026). The six write endpoints (with changing days, 26 Nov 2026) are `Open` entries in `ProtonCoverage` (Proton points to the page), and Proton has no read tool for time off. Proton logs through the same `WorkEntryService`, so hours it logs on a day off wait for approval like any others, and `propose_blocked_change` refuses to decide them: they are decided in the app. See [proton.md](proton.md).

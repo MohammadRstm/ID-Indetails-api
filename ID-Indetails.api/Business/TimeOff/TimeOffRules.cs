@@ -13,14 +13,18 @@ namespace ID_Indetails.api.Business.TimeOff;
 /// <item>Pending: the employee may withdraw it. Still pending when its first day comes, it expires.</item>
 /// <item>Approved: a super admin may reject it until its last day. The days before the rejection day stay time off; it
 /// and the days after are work days again. Leaving, moving out of Design or becoming an admin ends it the same way.</item>
-/// <item>Every calendar day of the period is "off" (no hours, the flag, the alerts); pay counts only its working days,
-/// as day excuses: a paid day off costs nothing on a salary; an unpaid one is deducted as the full paid day.</item>
+/// <item>Every calendar day of the period is "off" (the flag, the alerts, hours there wait for approval); pay counts only
+/// its working days, as day excuses: a paid day off costs nothing on a salary; an unpaid one is deducted as the full paid
+/// day.</item>
 /// </list>
 /// </summary>
 public static class TimeOffRules
 {
     public const int MaxNoteLength = 500;
     public const int MonthsAhead = 6;
+
+    /// <summary>The company days an entry touched before a change and touches after it: none before for new hours.</summary>
+    public sealed record EntryDays(IReadOnlyCollection<DateOnly> Before, IReadOnlyCollection<DateOnly> After);
 
     /// <summary>A request as the rules need it.</summary>
     public sealed record Period(long Id, DateOnly FirstDay, DateOnly LastDay, TimeOffStatus Status, DateOnly? EndedOn, bool? IsPaid)
@@ -177,7 +181,7 @@ public static class TimeOffRules
             : null;
     }
 
-    /// <summary>No hours on a day off, whoever logs them.</summary>
+    /// <summary>Hours logged for someone (released or forced, not approved for their time off) never land on a day off.</summary>
     public static RuleDenial? CheckEntryDays(IEnumerable<DateOnly> days, IReadOnlyList<Period> periods)
     {
         foreach (var day in days.Where(day => periods.Any(p => p.IsOff(day))))
@@ -188,11 +192,20 @@ public static class TimeOffRules
         return null;
     }
 
-    /// <summary>While someone is off, they don't change their hours at all.</summary>
-    public static RuleDenial? CheckNotOff(DateOnly today, IReadOnlyList<Period> periods)
-        => periods.FirstOrDefault(p => p.IsOff(today)) is { } period
-            ? RuleDenial.BusinessRule(ErrorCodes.OnTimeOff, $"You're on time off until {period.LastTaken:d MMM yyyy}: hours can't be logged or changed until then.")
-            : null;
+    /// <summary>
+    /// The first day of time off that a change puts hours on and that held none of them before: hours there wait for a
+    /// super admin's approval. Hours already on a day off (approved, or there before it was granted) are changed freely,
+    /// and so is everything on the other days. Null when there is none.
+    /// </summary>
+    public static DateOnly? NewDayOff(IEnumerable<EntryDays> changes, IReadOnlyList<Period> periods)
+        => changes
+            .SelectMany(c => c.After.Where(day => !c.Before.Contains(day)))
+            .Where(day => OffOn(day, periods) is not null)
+            .Select(day => (DateOnly?)day)
+            .Min();
+
+    /// <summary>Whether any of these days is a day of time off.</summary>
+    public static bool AnyOff(IEnumerable<DateOnly> days, IReadOnlyList<Period> periods) => days.Any(day => OffOn(day, periods) is not null);
 
     /// <summary>A day of time off isn't excused by hand too, nor a month that holds one excused whole: it would count twice.</summary>
     public static RuleDenial? CheckExcuse(ExcuseKind kind, IReadOnlyList<DateOnly> days, IReadOnlyList<Period> periods)

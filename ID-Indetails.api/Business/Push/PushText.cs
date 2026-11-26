@@ -124,7 +124,12 @@ public static class PushText
             NotificationKinds.TimeOffBack => new("Back at work", $"{Named(Text(payload, "name"), Someone)} is back at work today."),
             NotificationKinds.TimeOffEnded => new("Time off", $"{Named(Text(payload, "name"), Someone)}'s time off was cut short."),
             NotificationKinds.TimeOffOnline => new("On time off, but online", $"{Named(Text(payload, "name"), Someone)} is on time off but is using the app."),
-            NotificationKinds.TimeOffHours => new("On time off, logging hours", $"{Named(Text(payload, "name"), Someone)} is on time off but tried to log hours."),
+            NotificationKinds.TimeOffHours => new("Hours on a day off", $"{Named(Text(payload, "name"), Someone)} logged hours on a day of their time off. They wait for your approval."),
+            NotificationKinds.TimeOffHoursDecided => Bool(payload, "approved") == false
+                ? new("Hours turned down", $"Your hours on a day of your time off, on {project}, were turned down.")
+                : new("Hours approved", Bool(payload, "asOvertime") == true
+                    ? $"Your hours on a day of your time off, on {project}, were approved as overtime."
+                    : $"Your hours on a day of your time off, on {project}, were approved."),
 
             NotificationKinds.ProjectCreated => new("New project", $"{actor} added {project}."),
             NotificationKinds.ProjectStatusChanged => new("Project update", StatusChange(Text(payload, "change"), project)),

@@ -20,7 +20,8 @@ namespace ID_Indetails.api.Business.Finance;
 public static class PaidBreaks
 {
     /// <param name="Start">Minutes after midnight (company time) the work started.</param>
-    public sealed record Work(long Id, long ProjectId, DateOnly Day, int Start, int Minutes);
+    /// <param name="AllOvertime">Hours on a day of time off approved as overtime: they take no share of the break.</param>
+    public sealed record Work(long Id, long ProjectId, DateOnly Day, int Start, int Minutes, bool AllOvertime = false);
 
     public sealed record Share(long ProjectId, DateOnly Day, decimal Minutes);
 
@@ -30,7 +31,7 @@ public static class PaidBreaks
         var projectOf = work.ToDictionary(w => w.Id, w => w.ProjectId);
         var shares = new List<Share>();
 
-        foreach (var day in Overtime.Of(work.Select(w => new Overtime.Work(w.Id, w.Day, w.Start, w.Minutes)), calendar)
+        foreach (var day in Overtime.Of(work.Select(w => new Overtime.Work(w.Id, w.Day, w.Start, w.Minutes, w.AllOvertime)), calendar)
                      .Where(s => s.Normal > 0)
                      .GroupBy(s => s.Day))
         {
@@ -66,7 +67,7 @@ public static class PaidBreaks
     /// pays the whole break, so the company overview counts these as a company cost.
     /// </summary>
     public static IReadOnlyList<(DateOnly Day, int Minutes)> Unshared(IReadOnlyCollection<Work> work, PersonCalendar calendar)
-        => Overtime.Of(work.Select(w => new Overtime.Work(w.Id, w.Day, w.Start, w.Minutes)), calendar)
+        => Overtime.Of(work.Select(w => new Overtime.Work(w.Id, w.Day, w.Start, w.Minutes, w.AllOvertime)), calendar)
             .Where(s => s.Normal > 0)
             .GroupBy(s => s.Day)
             .Select(day => (Day: day.Key, Hours: calendar.HoursOn(day.Key), Normal: day.Sum(s => s.Normal)))

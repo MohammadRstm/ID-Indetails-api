@@ -364,7 +364,7 @@ public static class SalaryCalculator
             return 0;
         }
 
-        var work = input.Work.Select(w => new Finance.PaidBreaks.Work(w.Id, 0, w.Day, w.Start, w.Minutes)).ToList();
+        var work = input.Work.Select(w => new Finance.PaidBreaks.Work(w.Id, 0, w.Day, w.Start, w.Minutes, w.AllOvertime)).ToList();
         return Round(Finance.PaidBreaks.Unshared(work, input.Calendar)
             .Where(d => d.Day >= input.Month && d.Day < input.Month.AddMonths(1))
             .Sum(d => d.Minutes / 60m * HourlyRateOn(input, pay.Terms, d.Day)));

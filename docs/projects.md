@@ -214,6 +214,7 @@ A client project's profit may not reach zero unless someone who sees its money s
   - `GET` adds `person` and `projects`: each project it reaches with `profitNow` and, while it waits, `profitIfForced` from the same preview.
   - Forcing replays the pay change as its requester (they stay its creator; the forcer is `decidedBy`), past the floor. Only then is the employee told (`pay_changed`). A hold whose person's pay changed since is refused (`422 pay_change_stale`): dismiss it and make the change again.
   - Proton never decides a pay hold.
+- **Hours on a day of time off** wait the same way (26 Nov 2026), as kind `work_entry_time_off`: hours someone logged on a day of their own time off, or moved onto one (`422 time_off_hours_held`). Only holders of `time_off:decide` (super admins) see and decide them (`404` for anyone else). Forcing needs `{ asOvertime }` (`400` without it): the hours are logged as the person, as overtime or as normal hours, still through the profit floor. Not a money risk in Financial Intelligence. Proton never decides them. See [time-off.md](time-off.md), "Hours and time off".
 - **Changes nobody made** (schedules, exchange rates, a voided payment) aren't refused: the hourly scheduler sends `profit_low` and `profit_at_zero` for them, under the same keys, so nobody hears it twice (see [notifications.md](notifications.md)).
 
 ## Status

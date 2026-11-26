@@ -3,6 +3,7 @@ using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.Projects;
+using ID_Indetails.api.Business.TimeOff;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.WorkEntries;
@@ -31,9 +32,9 @@ namespace ID_Indetails.api.Services.WorkEntries.Implementation;
 /// People log only their own work, and only on Design projects (see <see cref="WorkEntryRules"/>).
 /// Someone else's entry reads as not found. Each change locks the person's user row, so overlap
 /// checks of two simultaneous changes run one after the other. Work in a closed month never changes unless a super admin
-/// reopened it for logging (<see cref="IOpenMonths"/>), no hours land on a day of time off, and someone on time off
-/// changes none (<see cref="ITimeOffWatch.CheckHoursAsync"/>). New work gives way to an excuse that stood in for it
-/// (<see cref="IExcuseTrimmer"/>).
+/// reopened it for logging (<see cref="IOpenMonths"/>). Hours put on a day of the person's own time off wait for a super
+/// admin's approval (<see cref="TimeOffHoursHeldException"/>); the other days take hours as always, time off or not. New
+/// work gives way to an excuse that stood in for it (<see cref="IExcuseTrimmer"/>).
 /// </summary>
 public sealed class WorkEntryService(
     ICurrentUser currentUser,
@@ -57,22 +58,21 @@ public sealed class WorkEntryService(
 {
     public bool LetOutsideDepartment { get; set; }
 
+    public bool? DayOffApproval { get; set; }
+
     public async Task<WorkEntryResponse> CreateAsync(SaveWorkEntryRequest request, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
-        await timeOff.CheckHoursAsync(actor.UserId, DaysOf(request), cancellationToken);
         var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         await entries.LockPersonAsync(actor.UserId, cancellationToken);
 
         var project = await LoggableProjectAsync(actor, request.ProjectId, settings, cancellationToken);
-        var department = await DepartmentOnAsync(actor, project, request, cancellationToken);
         var before = await floor.BeforeAsync(project, cancellationToken);
         var entry = new WorkEntry
         {
             UserId = actor.UserId,
             ProjectId = project.Id,
-            TeamId = department,
             Description = request.Description?.Trim() ?? string.Empty,
             StartedAt = WorkEntryRules.AsUtc(request.StartedAt),
             EndedAt = WorkEntryRules.AsUtc(request.EndedAt),
@@ -84,8 +84,16 @@ public sealed class WorkEntryService(
         Throw(WorkEntryRules.CheckOpenMonth(await openMonths.CurrentAsync(cancellationToken), entry.StartedAt));
 
         await DeleteOthersAsync(actor, request.Deletes, settings, cancellationToken);
-        var moved = await ApplyMovesAsync(actor, request.Moves, settings, cancellationToken);
+        var moves = await ApplyMovesAsync(actor, request.Moves, settings, cancellationToken);
+        var moved = moves.Select(m => m.Entry).ToList();
         await CheckOverlapAsync(actor.UserId, [new WorkEntryRules.Span(0, entry.StartedAt, entry.EndedAt, project.Title), .. moved.Select(SpanOf)], settings, cancellationToken);
+
+        var dayOff = await CheckDaysOffAsync(actor.UserId, [(entry, Array.Empty<DateOnly>()), .. moves], cancellationToken);
+        entry.TeamId = await DepartmentOnAsync(actor, project, request, holding: dayOff is not null, cancellationToken);
+        if (dayOff is { } day)
+        {
+            throw Held(project, new BlockedRequest<SaveWorkEntryRequest>(project.Id, request), day);
+        }
 
         entries.Add(entry);
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -95,7 +103,8 @@ public sealed class WorkEntryService(
         AddMoveEvents(moved, actor.UserId);
         await notifier.NotifyAsync(entry, project.Title, currentUser.FullName, settings.NotifyEntry, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        await floor.CheckAsync(before, BlockedChangeKind.WorkEntryCreate, new BlockedRequest<SaveWorkEntryRequest>(project.Id, request), cancellationToken);
+        await floor.CheckAsync(before, BlockedChangeKind.WorkEntryCreate,
+            new BlockedRequest<SaveWorkEntryRequest>(project.Id, request, DayOffOvertime: DayOffApproval), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         return await DescribeAsync(entry.Id, actor, settings, cancellationToken);
@@ -104,7 +113,6 @@ public sealed class WorkEntryService(
     public async Task<WorkEntryResponse> UpdateAsync(long id, SaveWorkEntryRequest request, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
-        await timeOff.CheckHoursAsync(actor.UserId, DaysOf(request), cancellationToken);
         var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         await entries.LockPersonAsync(actor.UserId, cancellationToken);
@@ -123,10 +131,11 @@ public sealed class WorkEntryService(
         if (project.Id != entry.ProjectId)
         {
             // moved to another project, the hours count in the department the logger is in now
-            entry.TeamId = await DepartmentOnAsync(actor, project, null, cancellationToken);
+            entry.TeamId = await DepartmentOnAsync(actor, project, null, holding: false, cancellationToken);
         }
 
         var before = await floor.BeforeAsync(project, cancellationToken);
+        var daysBefore = DaysOf(entry.StartedAt, entry.EndedAt);
 
         entry.ProjectId = project.Id;
         entry.Description = request.Description?.Trim() ?? string.Empty;
@@ -142,14 +151,19 @@ public sealed class WorkEntryService(
         Throw(WorkEntryRules.CheckEntry(entry.Description, entry.EndedAt, clock.UtcNow, settings.RequireDescription, settings.AllowFutureEntries));
 
         await DeleteOthersAsync(actor, request.Deletes, settings, cancellationToken);
-        var moved = await ApplyMovesAsync(actor, request.Moves.Where(m => m.Id != entry.Id).ToList(), settings, cancellationToken);
+        var moves = await ApplyMovesAsync(actor, request.Moves.Where(m => m.Id != entry.Id).ToList(), settings, cancellationToken);
+        var moved = moves.Select(m => m.Entry).ToList();
         await CheckOverlapAsync(actor.UserId, [new WorkEntryRules.Span(entry.Id, entry.StartedAt, entry.EndedAt, project.Title), .. moved.Select(SpanOf)], settings, cancellationToken);
+        if (await CheckDaysOffAsync(actor.UserId, [(entry, daysBefore), .. moves], cancellationToken) is { } day)
+        {
+            throw Held(project, new BlockedRequest<SaveWorkEntryRequest>(project.Id, request, ItemId: entry.Id), day);
+        }
 
         activity.Add(EntryEvent(entry, ActivityEventKinds.WorkEntryUpdated, actor.UserId));
         AddMoveEvents(moved, actor.UserId);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await floor.CheckAsync(before, BlockedChangeKind.WorkEntryUpdate,
-            new BlockedRequest<SaveWorkEntryRequest>(project.Id, request, ItemId: entry.Id), cancellationToken);
+            new BlockedRequest<SaveWorkEntryRequest>(project.Id, request, ItemId: entry.Id, DayOffOvertime: DayOffApproval), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         return await DescribeAsync(entry.Id, actor, settings, cancellationToken);
@@ -184,7 +198,6 @@ public sealed class WorkEntryService(
     public async Task DeleteAsync(long id, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
-        await timeOff.CheckHoursAsync(actor.UserId, [], cancellationToken);
         var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
 
@@ -206,7 +219,6 @@ public sealed class WorkEntryService(
         await entries.LockPersonAsync(actor.UserId, cancellationToken);
 
         var entry = Own(actor, await entries.GetDeletedForUpdateAsync(id, cancellationToken));
-        await timeOff.CheckHoursAsync(actor.UserId, DaysOf(entry.StartedAt, entry.EndedAt), cancellationToken);
         Throw(WorkEntryRules.CheckOpenMonth(await openMonths.CurrentAsync(cancellationToken), entry.StartedAt));
         Throw(WorkEntryRules.CheckChangeable(entry.CreatedAt, clock.UtcNow, settings.EditWindow, entry.Project.Status, settings.HoldLogging));
         await CheckOverlapAsync(actor.UserId, [SpanOf(entry)], settings, cancellationToken);
@@ -238,9 +250,10 @@ public sealed class WorkEntryService(
     /// <summary>
     /// The logger's department, which their hours count in. On a project with departments it must be one of them: new
     /// hours from another are kept until it is added (<paramref name="logged"/>, see <see cref="DepartmentBlockedException"/>);
-    /// hours moved there are refused.
+    /// hours moved there are refused. New hours <paramref name="holding"/> for a day off wait for that first: the
+    /// department is checked again once they are approved.
     /// </summary>
-    private async Task<long?> DepartmentOnAsync(UserAccess actor, Project project, SaveWorkEntryRequest? logged, CancellationToken cancellationToken)
+    private async Task<long?> DepartmentOnAsync(UserAccess actor, Project project, SaveWorkEntryRequest? logged, bool holding, CancellationToken cancellationToken)
     {
         var department = (await users.GetByIdAsync(actor.UserId, cancellationToken))?.TeamId;
         var onProject = (await departments.ListAsync([project.Id], cancellationToken)).Select(d => d.TeamId).ToList();
@@ -255,7 +268,7 @@ public sealed class WorkEntryService(
         }
 
         // approved by the project's owner or a super admin: these hours only, under "other"
-        if (LetOutsideDepartment && logged is not null)
+        if ((LetOutsideDepartment || holding) && logged is not null)
         {
             return theirs;
         }
@@ -268,15 +281,11 @@ public sealed class WorkEntryService(
         }
 
         throw new DepartmentBlockedException(project.Id, project.Title, project.DomainCode,
-            JsonSerializer.Serialize(new BlockedRequest<SaveWorkEntryRequest>(project.Id, logged), ProfitFloor.Json),
+            JsonSerializer.Serialize(new BlockedRequest<SaveWorkEntryRequest>(project.Id, logged, DayOffOvertime: DayOffApproval), ProfitFloor.Json),
             actor.UserId, project.OwnerId, theirs, name, currentUser.FullName);
     }
 
-    /// <summary>Other people's entries read as not found, whatever the caller may view.</summary>
-    /// <summary>The company days an entry's new times and its moves land on.</summary>
-    private List<DateOnly> DaysOf(SaveWorkEntryRequest request)
-        => [.. DaysOf(request.StartedAt, request.EndedAt), .. request.Moves.SelectMany(m => DaysOf(m.StartedAt, m.EndedAt))];
-
+    /// <summary>The company days a piece of work touches.</summary>
     private List<DateOnly> DaysOf(DateTime startedAt, DateTime endedAt)
     {
         var first = clock.ToCompanyDate(WorkEntryRules.AsUtc(startedAt));
@@ -284,6 +293,45 @@ public sealed class WorkEntryService(
         return last > first ? [first, last] : [first];
     }
 
+    /// <summary>
+    /// The first day of the person's time off that the change puts hours on, when they had none there: those hours wait
+    /// for approval. Logged for them (released or forced hours), they are refused, unless that approval is what is being
+    /// replayed. Each changed entry is marked as overtime on a day off as approved, keeps its mark while it stays on one,
+    /// and loses it once it leaves.
+    /// </summary>
+    /// <param name="changed">The new, edited and moved entries at their new times, with the days they were on before.</param>
+    private async Task<DateOnly?> CheckDaysOffAsync(
+        long userId, IReadOnlyList<(WorkEntry Entry, IReadOnlyList<DateOnly> Before)> changed, CancellationToken cancellationToken)
+    {
+        var pieces = changed
+            .Select(c => (c.Entry, Days: new TimeOffRules.EntryDays(c.Before, DaysOf(c.Entry.StartedAt, c.Entry.EndedAt))))
+            .ToList();
+        var periods = await timeOff.PeriodsOnAsync(userId, pieces.SelectMany(p => p.Days.Before.Concat(p.Days.After)).ToList(), cancellationToken);
+        foreach (var (entry, days) in pieces)
+        {
+            var newlyOff = TimeOffRules.NewDayOff([days], periods) is not null;
+            entry.TimeOffOvertime = TimeOffRules.AnyOff(days.After, periods) && (newlyOff ? DayOffApproval == true : entry.TimeOffOvertime);
+        }
+
+        var first = TimeOffRules.NewDayOff(pieces.Select(p => p.Days), periods);
+        if (first is null || DayOffApproval is not null)
+        {
+            return null;
+        }
+
+        if (currentUser.IsActing)
+        {
+            Throw(TimeOffRules.CheckEntryDays([first.Value], periods));
+        }
+
+        return first;
+    }
+
+    /// <summary>The change, kept for the super admins: hours on a day of the person's own time off.</summary>
+    private TimeOffHoursHeldException Held(Project project, BlockedRequest<SaveWorkEntryRequest> request, DateOnly day)
+        => new(project.Id, project.Title, project.DomainCode, JsonSerializer.Serialize(request, ProfitFloor.Json), currentUser.Id, currentUser.FullName, day);
+
+    /// <summary>Other people's entries read as not found, whatever the caller may view.</summary>
     private static WorkEntry Own(UserAccess actor, WorkEntry? entry)
         => entry is not null && entry.UserId == actor.UserId ? entry : throw new NotFoundException("Work entry not found.");
 
@@ -312,8 +360,8 @@ public sealed class WorkEntryService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
-    /// <summary>Moves the caller's other entries to their new times.</summary>
-    private async Task<IReadOnlyList<WorkEntry>> ApplyMovesAsync(
+    /// <summary>Moves the caller's other entries to their new times; each with the days it was on before.</summary>
+    private async Task<IReadOnlyList<(WorkEntry Entry, IReadOnlyList<DateOnly> Before)>> ApplyMovesAsync(
         UserAccess actor,
         IReadOnlyList<WorkEntryMoveRequest> moves,
         DomainSettings settings,
@@ -325,19 +373,21 @@ public sealed class WorkEntryService(
         }
 
         var tracked = await entries.ListOwnForUpdateAsync(actor.UserId, moves.Select(m => m.Id).ToList(), cancellationToken);
+        var result = new List<(WorkEntry Entry, IReadOnlyList<DateOnly> Before)>();
         foreach (var move in moves)
         {
             var entry = tracked.SingleOrDefault(e => e.Id == move.Id) ?? throw new NotFoundException("Work entry not found.");
             Throw(WorkEntryRules.CheckOpenMonth(await openMonths.CurrentAsync(cancellationToken), entry.StartedAt, WorkEntryRules.AsUtc(move.StartedAt)));
             Throw(WorkEntryRules.CheckChangeable(entry.CreatedAt, clock.UtcNow, settings.EditWindow, entry.Project.Status, settings.HoldLogging));
 
+            result.Add((entry, DaysOf(entry.StartedAt, entry.EndedAt)));
             entry.StartedAt = WorkEntryRules.AsUtc(move.StartedAt);
             entry.EndedAt = WorkEntryRules.AsUtc(move.EndedAt);
             entry.UpdatedAt = clock.UtcNow;
             Throw(WorkEntryRules.CheckEntry(entry.Description, entry.EndedAt, clock.UtcNow, requireDescription: false, settings.AllowFutureEntries));
         }
 
-        return tracked;
+        return result;
     }
 
     private async Task CheckOverlapAsync(

@@ -99,8 +99,8 @@ public sealed record MyProjectWorkResponse(
 
 /// <summary>One company-time-zone day: the caller's entries and the domain's meetings, earliest first. Meetings are not work time.</summary>
 /// <param name="OvertimeMinutes">The part of <paramref name="LoggedMinutes"/> that is overtime; the rest is normal time.</param>
-/// <param name="Waiting">Hours of the caller's waiting for approval that day (their department isn't on the project): not logged yet, but
-/// holding their time.</param>
+/// <param name="Waiting">Hours of the caller's waiting for approval that day (their department isn't on the project, or it is a day of
+/// their time off): not logged yet, but holding their time.</param>
 public sealed record MyDayResponse(
     DateOnly Date,
     int LoggedMinutes,
@@ -117,4 +117,5 @@ public sealed record MyDayResponse(
 public sealed record DayExcuseResponse(bool Day, int MonthMinutes, bool WholeMonth);
 
 /// <summary>Hours waiting for approval: the blocked change's id, the project, what was said and when.</summary>
-public sealed record WaitingHoursResponse(long Id, long ProjectId, string ProjectTitle, string Description, DateTime StartedAt, DateTime EndedAt);
+/// <param name="DayOff">True when they wait because the day is part of the caller's time off; false when for their department.</param>
+public sealed record WaitingHoursResponse(long Id, long ProjectId, string ProjectTitle, string Description, DateTime StartedAt, DateTime EndedAt, bool DayOff = false);
