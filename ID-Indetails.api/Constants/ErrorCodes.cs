@@ -321,6 +321,9 @@ public static class ErrorCodes
     /// <summary>422. Hours someone logged on a day of their own time off: kept, waiting for a super admin to approve them.</summary>
     public const string TimeOffHoursHeld = "time_off_hours_held";
 
+    /// <summary>422. Changing time off's days would add a day that already holds hours.</summary>
+    public const string TimeOffHoursLogged = "time_off_hours_logged";
+
     // Salary advances
     /// <summary>422. The person has no pay set today, so there is nothing an advance could come off.</summary>
     public const string SalaryAdvanceNoPay = "salary_advance_no_pay";

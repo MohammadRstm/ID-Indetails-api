@@ -1,3 +1,4 @@
+using System.Globalization;
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Constants;
@@ -107,6 +108,79 @@ public static class TimeOffRules
         return today > lastDay ? RuleDenial.BusinessRule(ErrorCodes.TimeOffOver, "This time off is over.") : null;
     }
 
+    /// <summary>
+    /// A super admin correcting approved time off: its days (past ones too, closed months included, since pay follows
+    /// live) and whether it is paid. The new days can't overlap the person's other time off nor a day excused by hand,
+    /// and can't add a day that already holds hours: those are removed or moved first.
+    /// </summary>
+    /// <param name="overlap">Another request of theirs, pending or with days taken, that the new days touch.</param>
+    /// <param name="excusedDays">Days excused by hand among the new ones.</param>
+    /// <param name="excusedMonth">A month excused whole that the new days touch.</param>
+    /// <param name="daysWithHours">Newly added days that hold hours.</param>
+    public static RuleDenial? CheckChange(
+        TimeOffStatus status,
+        DateOnly firstDay,
+        DateOnly lastDay,
+        DateOnly today,
+        bool unchanged,
+        bool hasWorkingDay,
+        Period? overlap,
+        IReadOnlyList<DateOnly> excusedDays,
+        DateOnly? excusedMonth,
+        IReadOnlyList<DateOnly> daysWithHours)
+    {
+        if (status != TimeOffStatus.Approved)
+        {
+            return RuleDenial.BusinessRule(ErrorCodes.TimeOffNotApproved, "Only approved time off can be changed.");
+        }
+
+        if (lastDay < firstDay)
+        {
+            return RuleDenial.Invalid(ErrorCodes.ValidationFailed, "lastDay", "The last day can't be before the first.");
+        }
+
+        if (firstDay > today.AddMonths(MonthsAhead))
+        {
+            return RuleDenial.Invalid(ErrorCodes.TimeOffTooFar, "firstDay", $"Time off can start at most {MonthsAhead} months ahead.");
+        }
+
+        if (unchanged)
+        {
+            return RuleDenial.Invalid(ErrorCodes.ValidationFailed, "firstDay", "Change the days or whether it is paid.");
+        }
+
+        if (!hasWorkingDay)
+        {
+            return RuleDenial.Invalid(ErrorCodes.TimeOffNoWorkingDay, "lastDay", "Those days hold none of the person's working days.");
+        }
+
+        if (overlap is not null)
+        {
+            var end = overlap.Status == TimeOffStatus.Pending ? overlap.LastDay : overlap.LastTaken;
+            return RuleDenial.BusinessRule(
+                ErrorCodes.TimeOffOverlaps,
+                $"They already have time off from {Long(overlap.FirstDay)} to {Long(end)}: the new days can't overlap it.");
+        }
+
+        if (excusedMonth is { } month)
+        {
+            return RuleDenial.BusinessRule(
+                ErrorCodes.TimeOffExcused,
+                $"{month.ToString("MMMM yyyy", CultureInfo.InvariantCulture)} is excused whole in their hours: remove that excuse on Salaries first.");
+        }
+
+        if (excusedDays.Count > 0)
+        {
+            return RuleDenial.BusinessRule(
+                ErrorCodes.TimeOffExcused,
+                $"{Named(excusedDays)} {(excusedDays.Count == 1 ? "is" : "are")} already excused in their hours: remove the excuse on Salaries first.");
+        }
+
+        return daysWithHours.Count > 0
+            ? RuleDenial.BusinessRule(ErrorCodes.TimeOffHoursLogged, $"They logged hours on {Named(daysWithHours)}: remove or move those hours first.")
+            : null;
+    }
+
     /// <summary>Hours logged for someone (released or forced, not approved for their time off) never land on a day off.</summary>
     public static RuleDenial? CheckEntryDays(IEnumerable<DateOnly> days, IReadOnlyList<Period> periods)
     {
@@ -172,6 +246,15 @@ public static class TimeOffRules
 
         return days;
     }
+
+    /// <summary>Up to five days by name, then how many more.</summary>
+    private static string Named(IReadOnlyList<DateOnly> days)
+    {
+        var named = string.Join(", ", days.Order().Take(5).Select(Long));
+        return days.Count > 5 ? $"{named} and {days.Count - 5} more" : named;
+    }
+
+    private static string Long(DateOnly day) => day.ToString("d MMM yyyy", CultureInfo.InvariantCulture);
 
     private static DateOnly Min(DateOnly a, DateOnly b) => a < b ? a : b;
 

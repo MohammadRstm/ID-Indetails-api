@@ -50,6 +50,15 @@ public sealed class TimeOffRepository(IdIndetailsDbContext db) : ITimeOffReposit
                 && r.FirstDay <= to && r.LastDay >= from,
             cancellationToken);
 
+    public async Task<TimeOffRules.Period?> OverlapAsync(long userId, long exceptId, DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
+        => (await db.TimeOffRequests.AsNoTracking()
+                .Where(r => r.UserId == userId && r.Id != exceptId && r.FirstDay <= to && r.LastDay >= from
+                    && (r.Status == TimeOffStatus.Pending || Granted.Contains(r.Status)))
+                .OrderBy(r => r.FirstDay)
+                .ToListAsync(cancellationToken))
+            .Select(PeriodOf)
+            .FirstOrDefault(p => p.Status == TimeOffStatus.Pending || p.Takes(from, to));
+
     public async Task<IReadOnlyList<(long UserId, TimeOffRules.Period Period)>> GrantedAsync(
         IReadOnlyCollection<long>? userIds, DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
     {

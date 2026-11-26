@@ -114,6 +114,9 @@ public static class PushText
             NotificationKinds.TimeOffApproved => new("Time off", $"Your time off{From(payload)} was approved."),
             NotificationKinds.TimeOffDeclined => new("Time off", $"Your request for time off{From(payload)} was declined."),
             NotificationKinds.TimeOffRejected => new("Time off", "Your time off was taken back from today."),
+            NotificationKinds.TimeOffChanged => new("Time off changed", Date(payload, "firstDay") is { } first && Date(payload, "lastDay") is { } last
+                ? $"Your time off is now from {Day(first)} to {Day(last)}."
+                : "Your time off was changed."),
             NotificationKinds.TimeOffExpired => new("Time off", $"Your request for time off{From(payload)} expired undecided."),
             NotificationKinds.TimeOffStarts => new("Off today", Date(payload, "lastDay") is { } until
                 ? $"{Named(Text(payload, "name"), Someone)} is off until {Day(until)}."

@@ -25,6 +25,22 @@ public sealed class AskTimeOffRequestValidator : AbstractValidator<AskTimeOffReq
     }
 }
 
+public sealed class ChangeTimeOffRequestValidator : AbstractValidator<ChangeTimeOffRequest>
+{
+    public ChangeTimeOffRequestValidator()
+    {
+        RuleFor(x => x.FirstDay).NotEqual(default(DateOnly)).WithMessage("Choose the first day.");
+        RuleFor(x => x.LastDay).NotEqual(default(DateOnly)).WithMessage("Choose the last day.");
+        RuleFor(x => x.LastDay)
+            .GreaterThanOrEqualTo(x => x.FirstDay).WithMessage("The last day can't be before the first.")
+            .LessThan(x => x.FirstDay.AddDays(AskTimeOffRequestValidator.MaxDays)).WithMessage("Time off can be at most a year long.")
+            .When(x => x.FirstDay != default && x.LastDay != default);
+        RuleFor(x => x.Reason)
+            .NotEmpty().WithMessage("Say why the time off is changing.")
+            .MaximumLength(TimeOffRules.MaxNoteLength).WithMessage($"The reason must be at most {TimeOffRules.MaxNoteLength} characters.");
+    }
+}
+
 public sealed class ApproveTimeOffRequestValidator : AbstractValidator<ApproveTimeOffRequest>
 {
     public ApproveTimeOffRequestValidator()

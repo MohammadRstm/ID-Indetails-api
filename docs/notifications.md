@@ -70,10 +70,11 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `schedule_changed` | The person | the person | `effectiveFrom`, `followsDefault` |
 | `time_off_requested` | Holders of `time_off:decide` (every super admin) | the request | `name`, `firstDay`, `lastDay` (never the reason) |
 | `time_off_withdrawn` | The same, when the employee takes back a pending request | the request | `name`, `firstDay`, `lastDay` |
-| `time_off_approved` | The employee | the request | `firstDay`, `lastDay`, `isPaid` (the only place the paid flag is sent) |
+| `time_off_approved` | The employee | the request | `firstDay`, `lastDay`, `isPaid` (with `time_off_changed`, the only places the paid flag is sent) |
 | `time_off_declined` | The employee | the request | `firstDay`, `lastDay` |
 | `time_off_rejected` | The employee, when approved time off is taken back | the request | `firstDay`, `lastDay`, `endedOn` |
-| `time_off_back` | The person's department (active employees and admins) and every super admin, never the person, when time off already under way is rejected | the person | `name`, `userId` |
+| `time_off_changed` | The employee, when a super admin changes approved time off's days or pay | the request | `firstDay`, `lastDay`, `isPaid`, `previousFirstDay`, `previousLastDay`, `previousIsPaid`, `reason` (the super admin's reason for the change) |
+| `time_off_back` | The person's department (active employees and admins) and every super admin, never the person, when time off already under way is rejected, or changed so the person is no longer off today | the person | `name`, `userId` |
 | `time_off_ended` | Holders of `time_off:decide`, when someone leaves, moves out of Design or becomes an admin and had open time off | the person | `name`, `userId`, `why` |
 | `time_off_online` | Holders of `time_off:decide`, when someone on time off uses the app. Once a day per request (`time-off-online-{requestId}-{yyyyMMdd}`) | the person | `name`, `userId`, `lastDay` |
 | `time_off_hours` | Every super admin (listed for holders of `time_off:decide`), when someone logs hours on a day of their own time off: they wait for approval ([time-off.md](time-off.md), "Hours and time off"). Until 26 Nov 2026 it alerted, once an hour, that someone off tried to log hours (subject the person) | the blocked change (`blocked_change`) | `name`, `userId`, `day` |
@@ -172,7 +173,7 @@ A rolling digest (`work_digest`, `requirements_added`) pushes in full at most on
 | `meetings` | `meeting_scheduled`, `meeting_invited`, `meeting_moved`, `meeting_cancelled`, `meeting_soon` |
 | `sites` | `materials_added`, `labour_week_submitted`, `labour_week_reminder`, `boq_submitted`, `boq_draft_edited` |
 | `money` | the `invoice_*` kinds, `payment_recorded`, `pocket_requested`, `pocket_round_off`, `change_blocked`, `pay_change_held`, `profit_low`, `profit_at_zero`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short`, and the six `salary_advance_*` kinds (`requested`, `withdrawn`, `approved`, `declined`, `recorded`, `unsettled`) |
-| `people` | `invitation_accepted`, `role_changed`, `domain_changed`, `team_changed`, `permissions_changed`, and the thirteen `time_off_*` kinds (`requested`, `withdrawn`, `approved`, `declined`, `rejected`, `expired`, `undecided`, `starts`, `back`, `ended`, `online`, `hours`, `hours_decided`) |
+| `people` | `invitation_accepted`, `role_changed`, `domain_changed`, `team_changed`, `permissions_changed`, and the fourteen `time_off_*` kinds (`requested`, `withdrawn`, `approved`, `declined`, `rejected`, `changed`, `expired`, `undecided`, `starts`, `back`, `ended`, `online`, `hours`, `hours_decided`) |
 | `messages` | `message` (mentions and direct messages included), the client portal's `portal_client_message`, `portal_client_comment` and `portal_mention`, and `project_file_comment` |
 
 `log_reminder` has no category, so it can't be muted. Each person chooses their own quiet hours and muted categories ([me.md](me.md#my-notification-settings)); until they do, quiet hours are 22:00 to 07:00 in the company's time zone and nothing is muted. A push during quiet hours is still delivered, without sound, on the `quiet` channel (passive on iOS); nothing waits on the server.

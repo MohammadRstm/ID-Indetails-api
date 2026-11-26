@@ -24,6 +24,9 @@ public interface ITimeOffService
     /// <summary>Takes back approved time off from today: the days before stay time off.</summary>
     Task<TimeOffResponse> RejectAsync(long id, TimeOffNoteRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>Corrects approved time off: its days, past ones included, and whether it is paid.</summary>
+    Task<TimeOffResponse> ChangeAsync(long id, ChangeTimeOffRequest request, CancellationToken cancellationToken = default);
+
     /// <summary>Who is off, and when, on any day of the query: for the Off flags.</summary>
     Task<IReadOnlyList<AwayResponse>> AwayAsync(AwayQuery query, CancellationToken cancellationToken = default);
 }

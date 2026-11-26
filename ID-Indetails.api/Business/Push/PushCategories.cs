@@ -91,6 +91,7 @@ public static class PushCategories
         [NotificationKinds.TimeOffApproved] = NotificationCategory.People,
         [NotificationKinds.TimeOffDeclined] = NotificationCategory.People,
         [NotificationKinds.TimeOffRejected] = NotificationCategory.People,
+        [NotificationKinds.TimeOffChanged] = NotificationCategory.People,
         [NotificationKinds.TimeOffExpired] = NotificationCategory.People,
         [NotificationKinds.TimeOffUndecided] = NotificationCategory.People,
         [NotificationKinds.TimeOffStarts] = NotificationCategory.People,
