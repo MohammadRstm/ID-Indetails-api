@@ -140,7 +140,7 @@ public class TimeOffHoursTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         (await CountAsync("SELECT COUNT(*) FROM work_entries WHERE user_id = @u AND time_off_overtime = 1", ("@u", employee.User.Id))).ShouldBe(1);
         var entryId = await CountAsync("SELECT result_id FROM blocked_changes WHERE id = @id", ("@id", id));
-        var entry = await OkAsync<WorkEntryResponse>(Client.GetAsync($"/api/work-entries/{entryId}", employee.AccessToken));
+        var entry = (await OkAsync<WorkEntryDetailResponse>(Client.GetAsync($"/api/work-entries/{entryId}", employee.AccessToken))).Entry;
         entry.OvertimeMinutes.ShouldBe(30);
 
         var told = (await OfKindAsync(employee, NotificationKinds.TimeOffHoursDecided)).ShouldHaveSingleItem();
@@ -207,7 +207,7 @@ public class TimeOffHoursTests(ApiFactory api) : IClassFixture<ApiFactory>
 
             // approved, the entry moves there, counted as overtime
             await OkAsync<BlockedChangeResponse>(ApproveAsync(superAdmin, id, asOvertime: true));
-            var moved = await OkAsync<WorkEntryResponse>(Client.GetAsync($"/api/work-entries/{logged.Id}", employee.AccessToken));
+            var moved = (await OkAsync<WorkEntryDetailResponse>(Client.GetAsync($"/api/work-entries/{logged.Id}", employee.AccessToken))).Entry;
             WorkEntryTestSteps.CompanyDay(moved.StartedAt).ShouldBe(WorkEntryTestSteps.CompanyDay(start));
             moved.OvertimeMinutes.ShouldBe(30);
         }
