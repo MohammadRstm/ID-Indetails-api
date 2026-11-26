@@ -1,8 +1,9 @@
 namespace ID_Indetails.api.Enums;
 
 /// <summary>
-/// What a refused change was: one the profit floor refused (a pay change among them, <see cref="PayChange"/>), or hours
-/// logged by someone whose department isn't on the project (<see cref="WorkEntryDepartment"/>), kept until it is added.
+/// What a refused change was: one the profit floor refused (a pay change among them, <see cref="PayChange"/>), hours
+/// logged by someone whose department isn't on the project (<see cref="WorkEntryDepartment"/>), kept until it is added,
+/// or hours someone logged on a day of their own time off (<see cref="WorkEntryTimeOff"/>).
 /// </summary>
 public enum BlockedChangeKind
 {
@@ -31,6 +32,12 @@ public enum BlockedChangeKind
     /// see, force or dismiss it.
     /// </summary>
     PayChange,
+
+    /// <summary>
+    /// Hours someone logged on a day of their own time off, or moved onto one: a super admin approves them as overtime or
+    /// as normal hours, or turns them down. The payload is the log or edit as it was sent.
+    /// </summary>
+    WorkEntryTimeOff,
 }
 
 /// <summary>Where a refused change stands.</summary>

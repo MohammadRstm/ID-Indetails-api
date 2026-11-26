@@ -328,7 +328,7 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             t.HasCheckConstraint("ck_blocked_changes_decided", "(`status` = 'pending') = (`decided_at` IS NULL)");
 
-                            t.HasCheckConstraint("ck_blocked_changes_kind", "`kind` IN ('expense', 'material_add', 'material_update', 'labour_week', 'work_entry_create', 'work_entry_update', 'payment', 'pricing', 'boq_agree', 'boq_withdraw', 'work_entry_department', 'design_vo', 'pay_change')");
+                            t.HasCheckConstraint("ck_blocked_changes_kind", "`kind` IN ('expense', 'material_add', 'material_update', 'labour_week', 'work_entry_create', 'work_entry_update', 'payment', 'pricing', 'boq_agree', 'boq_withdraw', 'work_entry_department', 'design_vo', 'pay_change', 'work_entry_time_off')");
 
                             t.HasCheckConstraint("ck_blocked_changes_status", "`status` IN ('pending', 'forced', 'dismissed')");
                         });
@@ -8002,6 +8002,10 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Property<long?>("TeamId")
                         .HasColumnType("bigint")
                         .HasColumnName("team_id");
+
+                    b.Property<bool>("TimeOffOvertime")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("time_off_overtime");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasPrecision(3)

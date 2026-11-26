@@ -57,7 +57,8 @@ public interface IPayrollRepository
     Task<IReadOnlyDictionary<long, ProjectLook>> ProjectLooksAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
 }
 
-public sealed record WorkEntryTime(long Id, long UserId, long ProjectId, DateTime StartedAt, int Minutes);
+/// <param name="TimeOffOvertime">Hours on a day of time off approved as overtime: all of them are overtime.</param>
+public sealed record WorkEntryTime(long Id, long UserId, long ProjectId, DateTime StartedAt, int Minutes, bool TimeOffOvertime = false);
 
 public sealed record RoleChangeRow(long UserId, DateTime OccurredAt, string From, string To);
 

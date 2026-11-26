@@ -4,6 +4,7 @@ using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.Execution;
 using ID_Indetails.api.Business.Projects;
+using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Boqs;
 using ID_Indetails.api.DTO.Request.Employees;
@@ -54,6 +55,7 @@ public sealed class BlockedChangeService(
     IEmployeeService employees,
     IEmployeeRepository payRecords,
     IProjectRepository projectRows,
+    IBlockedChangeRecorder recorder,
     INotificationSender notifications,
     IUnitOfWork unitOfWork,
     IClock clock) : IBlockedChangeService
@@ -61,23 +63,38 @@ public sealed class BlockedChangeService(
     public async Task<BlockedChangeResponse> GetAsync(long id, CancellationToken cancellationToken = default)
         => await DescribeAsync(await RowAsync(await ActorAsync(cancellationToken), id, cancellationToken), cancellationToken);
 
-    public async Task<BlockedChangeResponse> ForceAsync(long id, CancellationToken cancellationToken = default)
+    public async Task<BlockedChangeResponse> ForceAsync(long id, bool? asOvertime = null, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
         var row = await RowAsync(actor, id, cancellationToken);
+        var dayOff = row.Change.Kind == BlockedChangeKind.WorkEntryTimeOff;
+        if (dayOff && asOvertime is null)
+        {
+            throw new RequestValidationException(ErrorCodes.ValidationFailed, "asOvertime", "Say whether these hours count as overtime or as normal hours.");
+        }
+
         if (row.Change.Kind == BlockedChangeKind.PayChange)
         {
             await CheckPayHoldAsync(row.Change, actor, forcing: true, cancellationToken);
         }
 
         await DecideAsync(row, BlockedChangeStatus.Forced, actor, cancellationToken);
+        var keptAgain = false;
         try
         {
-            floor.Forcing = true;
-            if (await ReplayAsync(row.Change, cancellationToken) is { } resultId)
+            // approving hours on a day off is about the time off, not the money: the profit floor still applies
+            floor.Forcing = !dayOff;
+            if (await ReplayAsync(row.Change, asOvertime, cancellationToken) is { } resultId)
             {
                 await changes.SetResultAsync(id, resultId, cancellationToken);
             }
+        }
+        catch (BlockedChangeException kept) when (dayOff)
+        {
+            // approved, but the hours now wait for something else (their department, the profit floor): kept as that,
+            // with the approval, so they need no second one
+            await recorder.RecordAsync(kept, cancellationToken);
+            keptAgain = true;
         }
         catch
         {
@@ -89,11 +106,17 @@ public sealed class BlockedChangeService(
         {
             floor.Forcing = false;
             workEntries.LetOutsideDepartment = false;
+            workEntries.DayOffApproval = null;
         }
 
         if (row.Change.Kind == BlockedChangeKind.WorkEntryDepartment)
         {
             await TellLoggerAsync(row, actor, approved: true, cancellationToken);
+        }
+
+        if (dayOff)
+        {
+            await TellDayOffAsync(row, actor, approved: true, asOvertime, keptAgain, cancellationToken);
         }
 
         return await DescribeAsync(await RowAsync(actor, id, cancellationToken), cancellationToken);
@@ -114,6 +137,11 @@ public sealed class BlockedChangeService(
             await TellLoggerAsync(row, actor, approved: false, cancellationToken);
         }
 
+        if (row.Change.Kind == BlockedChangeKind.WorkEntryTimeOff)
+        {
+            await TellDayOffAsync(row, actor, approved: false, null, keptAgain: false, cancellationToken);
+        }
+
         return await DescribeAsync(await RowAsync(actor, id, cancellationToken), cancellationToken);
     }
 
@@ -129,9 +157,38 @@ public sealed class BlockedChangeService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
-    /// <summary>Makes the refused request again, through the same service and checks; returns what it made, if anything.</summary>
-    private async Task<long?> ReplayAsync(Models.BlockedChange change, CancellationToken cancellationToken)
+    /// <summary>
+    /// Tells whoever logged hours on a day of their time off how they were decided: approved as overtime or as normal
+    /// hours (and whether they now wait for something else), or turned down.
+    /// </summary>
+    private async Task TellDayOffAsync(BlockedChangeRow row, UserAccess actor, bool approved, bool? asOvertime, bool keptAgain, CancellationToken cancellationToken)
     {
+        var request = Read<SaveWorkEntryRequest>(row.Change).Request;
+        await notifications.SendAsync(
+            new NotificationDraft(NotificationKinds.TimeOffHoursDecided, actor.UserId, row.Project.DomainCode, row.Project.Id, "project", row.Project.Id,
+                new
+                {
+                    projectTitle = row.Project.Title,
+                    day = clock.ToCompanyDate(WorkEntryRules.AsUtc(request.StartedAt)),
+                    approved,
+                    asOvertime = approved && asOvertime == true,
+                    waiting = keptAgain,
+                }),
+            [row.Change.RequestedById],
+            cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Makes the refused request again, through the same service and checks; returns what it made, if anything.</summary>
+    /// <param name="asOvertime">Hours on a day of time off only: how they were approved.</param>
+    private async Task<long?> ReplayAsync(Models.BlockedChange change, bool? asOvertime, CancellationToken cancellationToken)
+    {
+        if (change.Kind is BlockedChangeKind.WorkEntryCreate or BlockedChangeKind.WorkEntryUpdate or BlockedChangeKind.WorkEntryDepartment)
+        {
+            // hours on a day off approved before they were kept again for this
+            workEntries.DayOffApproval = Read<SaveWorkEntryRequest>(change).DayOffOvertime;
+        }
+
         switch (change.Kind)
         {
             case BlockedChangeKind.Expense:
@@ -159,6 +216,14 @@ public sealed class BlockedChangeService(
                 var entry = Read<SaveWorkEntryRequest>(change);
                 await ActAsAsync(change.RequestedById, cancellationToken);
                 return (await workEntries.UpdateAsync(entry.ItemId!.Value, entry.Request, cancellationToken)).Id;
+            case BlockedChangeKind.WorkEntryTimeOff:
+                // approved: these hours, as the person logged or changed them, as overtime or as normal hours
+                var dayOff = Read<SaveWorkEntryRequest>(change);
+                await ActAsAsync(change.RequestedById, cancellationToken);
+                workEntries.DayOffApproval = asOvertime;
+                return dayOff.ItemId is { } itemId
+                    ? (await workEntries.UpdateAsync(itemId, dayOff.Request, cancellationToken)).Id
+                    : (await workEntries.CreateAsync(dayOff.Request, cancellationToken)).Id;
             case BlockedChangeKind.Payment:
                 var payment = Read<UpdateProjectPaymentRequest>(change);
                 await projects.UpdatePaymentAsync(payment.ProjectId, payment.Request, cancellationToken);
@@ -327,13 +392,17 @@ public sealed class BlockedChangeService(
                 return $"Expense change: {Read<SiteExpenseEntryRequest>(change).Request.Name.Trim()}";
             case BlockedChangeKind.LabourWeek:
                 return $"Labour of the week of {Read<SubmitLabourWeekRequest>(change).WeekStart:d MMM yyyy}";
-            case BlockedChangeKind.WorkEntryCreate or BlockedChangeKind.WorkEntryUpdate or BlockedChangeKind.WorkEntryDepartment:
-                var entry = Read<SaveWorkEntryRequest>(change).Request;
+            case BlockedChangeKind.WorkEntryCreate or BlockedChangeKind.WorkEntryUpdate or BlockedChangeKind.WorkEntryDepartment
+                or BlockedChangeKind.WorkEntryTimeOff:
+                var held = Read<SaveWorkEntryRequest>(change);
+                var entry = held.Request;
                 var minutes = (int)(entry.EndedAt - entry.StartedAt).TotalMinutes;
                 return $"{change.Kind switch
                 {
                     BlockedChangeKind.WorkEntryCreate => "Hours logged",
                     BlockedChangeKind.WorkEntryDepartment => "Hours waiting for their department",
+                    BlockedChangeKind.WorkEntryTimeOff when held.ItemId is null => "Hours logged on a day off",
+                    BlockedChangeKind.WorkEntryTimeOff => "Hours moved onto a day off",
                     _ => "Hours changed",
                 }}: "
                     + $"{minutes / 60}h {minutes % 60:00}m on {clock.ToCompanyDate(entry.StartedAt.ToUniversalTime()):d MMM yyyy}";
@@ -365,8 +434,10 @@ public sealed class BlockedChangeService(
     private async Task<BlockedChangeRow> RowAsync(UserAccess actor, long id, CancellationToken cancellationToken)
     {
         var row = await changes.GetAsync(id, cancellationToken);
-        // a held pay change is the super admins' alone, as pay is
-        return row is not null && actor.CanSee(row.Project.DomainCode) && (row.Change.Kind != BlockedChangeKind.PayChange || actor.IsSuperAdmin)
+        // a held pay change is the super admins' alone, as pay is; hours on a day off are whoever decides time off's
+        return row is not null && actor.CanSee(row.Project.DomainCode)
+            && (row.Change.Kind != BlockedChangeKind.PayChange || actor.IsSuperAdmin)
+            && (row.Change.Kind != BlockedChangeKind.WorkEntryTimeOff || actor.Has(PermissionCodes.TimeOffDecide))
             ? row
             : throw new NotFoundException("Change not found.");
     }

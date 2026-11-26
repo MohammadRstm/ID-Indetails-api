@@ -138,6 +138,18 @@ public sealed class BlockedChangeRecorder(
             return;
         }
 
+        if (refused is TimeOffHoursHeldException dayOff)
+        {
+            // time off is the super admins' to decide; the notification never says which project or how long
+            await notifications.SendAsync(
+                new NotificationDraft(NotificationKinds.TimeOffHours, refused.RequestedById, refused.Domain, refused.ProjectId, "blocked_change", change.Id,
+                    new { name = dayOff.PersonName, userId = refused.RequestedById, day = dayOff.Day }),
+                await notifications.SuperAdminsAsync(cancellationToken),
+                cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
         if (refused is PayChangeHeldException held)
         {
             // pay is the super admins' alone, and the notification never says how much

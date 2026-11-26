@@ -182,7 +182,7 @@ public sealed class MyWorkService(
                 .Select(w => (w, Request: WaitingHours.Of(w.Change, ProfitFloor.Json)))
                 .Where(x => x.Request is { } r && WorkEntryRules.AsUtc(r.StartedAt) < to && WorkEntryRules.AsUtc(r.EndedAt) > from)
                 .Select(x => new WaitingHoursResponse(x.w.Change.Id, x.w.Change.ProjectId, x.w.ProjectTitle, x.Request!.Description ?? string.Empty,
-                    WorkEntryRules.AsUtc(x.Request.StartedAt), WorkEntryRules.AsUtc(x.Request.EndedAt)))
+                    WorkEntryRules.AsUtc(x.Request.StartedAt), WorkEntryRules.AsUtc(x.Request.EndedAt), x.w.Change.Kind == BlockedChangeKind.WorkEntryTimeOff))
                 .ToList(),
             await ExcuseOnAsync(actor.UserId, day, cancellationToken));
     }

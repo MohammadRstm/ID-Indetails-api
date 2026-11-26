@@ -108,3 +108,18 @@ public sealed class DepartmentBlockedException(
 
     public string PersonName { get; } = personName;
 }
+
+/// <summary>
+/// 422 <c>time_off_hours_held</c>. Hours someone logged on a day of their own time off (<paramref name="day"/>, the first):
+/// kept, and the super admins are asked to approve them as overtime or as normal hours, or turn them down.
+/// </summary>
+public sealed class TimeOffHoursHeldException(
+    long projectId, string projectTitle, string domain, string payload, long requestedById, string personName, DateOnly day)
+    : BlockedChangeException(ErrorCodes.TimeOffHoursHeld,
+        $"{day:d MMM yyyy} is a day of your time off. Your hours wait for approval.",
+        projectId, projectTitle, domain, BlockedChangeKind.WorkEntryTimeOff, payload, requestedById)
+{
+    public string PersonName { get; } = personName;
+
+    public DateOnly Day { get; } = day;
+}

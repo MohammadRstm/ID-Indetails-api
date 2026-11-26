@@ -315,11 +315,11 @@ public static class ErrorCodes
     /// <summary>422. The time off's last day has passed.</summary>
     public const string TimeOffOver = "time_off_over";
 
-    /// <summary>422. No hours can be dated on a day of time off.</summary>
+    /// <summary>422. Hours logged for someone (a release or a forced change) can't be dated on a day of their time off unless approved.</summary>
     public const string TimeOffDay = "time_off_day";
 
-    /// <summary>422. Someone on time off can't log or change any hours until it's over.</summary>
-    public const string OnTimeOff = "on_time_off";
+    /// <summary>422. Hours someone logged on a day of their own time off: kept, waiting for a super admin to approve them.</summary>
+    public const string TimeOffHoursHeld = "time_off_hours_held";
 
     // Salary advances
     /// <summary>422. The person has no pay set today, so there is nothing an advance could come off.</summary>

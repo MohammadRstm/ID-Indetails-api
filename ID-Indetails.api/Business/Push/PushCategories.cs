@@ -98,6 +98,7 @@ public static class PushCategories
         [NotificationKinds.TimeOffEnded] = NotificationCategory.People,
         [NotificationKinds.TimeOffOnline] = NotificationCategory.People,
         [NotificationKinds.TimeOffHours] = NotificationCategory.People,
+        [NotificationKinds.TimeOffHoursDecided] = NotificationCategory.People,
 
         [PushKinds.Message] = NotificationCategory.Messages,
         [NotificationKinds.PortalClientMessage] = NotificationCategory.Messages,

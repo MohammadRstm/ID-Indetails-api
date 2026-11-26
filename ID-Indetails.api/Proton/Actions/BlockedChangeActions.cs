@@ -24,7 +24,8 @@ public sealed record BlockedChangeInput : ProtonActionInput
     public required long BlockedChangeId { get; init; }
 
     [Description("force: make the refused change anyway, past the profit floor. dismiss: drop it. Only when the user said which. " +
-                 "Hours waiting for their logger's department are never forced: they go through once the department is added to the project.")]
+                 "Hours waiting for their logger's department are never forced: they go through once the department is added to the project. " +
+                 "Hours logged on a day of someone's time off are decided in the app, never here.")]
     public required ProtonBlockedChangeStep Step { get; init; }
 }
 
@@ -70,6 +71,12 @@ public sealed class ProposeBlockedChangeTool(IBlockedChangeService changes) : Pr
         if (change.Kind == BlockedChangeKind.PayChange)
         {
             throw new ProtonToolInputException("A held pay change is decided in the app by a super admin: pay never reaches Proton.");
+        }
+
+        if (change.Kind == BlockedChangeKind.WorkEntryTimeOff)
+        {
+            throw new ProtonToolInputException(
+                "Hours logged on a day of someone's time off are approved (as overtime or normal hours) or turned down in the app by a super admin: time off isn't covered by Proton yet.");
         }
 
         var waiting = change.Kind == BlockedChangeKind.WorkEntryDepartment;
@@ -123,7 +130,7 @@ public sealed class ProposeBlockedChangeTool(IBlockedChangeService changes) : Pr
             return new ProtonActionDone($"Dropped the refused change on {current.ProjectTitle}.", "blocked_change", args.ChangeId, [target]);
         }
 
-        await changes.ForceAsync(args.ChangeId, cancellationToken);
+        await changes.ForceAsync(args.ChangeId, cancellationToken: cancellationToken);
         return new ProtonActionDone($"Made the refused change on {current.ProjectTitle}.", "blocked_change", args.ChangeId, [target]);
     }
 }

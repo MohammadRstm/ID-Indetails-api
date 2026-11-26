@@ -1,4 +1,3 @@
-using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.TimeOff;
 using ID_Indetails.api.Constants;
@@ -18,7 +17,6 @@ using ID_Indetails.api.Services.TimeOff.Abstraction;
 namespace ID_Indetails.api.Services.TimeOff.Implementation;
 
 public sealed class TimeOffWatch(
-    ICurrentUser currentUser,
     ITimeOffRepository timeOff,
     IUserRepository users,
     IActivityEventRepository activity,
@@ -33,26 +31,10 @@ public sealed class TimeOffWatch(
             ? Task.FromResult<IReadOnlyList<(long, TimeOffRules.Period)>>([])
             : timeOff.GrantedAsync(userIds, from, to, cancellationToken);
 
-    public async Task CheckHoursAsync(long userId, IReadOnlyCollection<DateOnly> entryDays, CancellationToken cancellationToken = default)
-    {
-        var today = clock.CompanyToday;
-        var from = entryDays.Append(today).Min();
-        var to = entryDays.Append(today).Max();
-        var periods = (await timeOff.GrantedAsync([userId], from, to, cancellationToken)).Select(x => x.Period).ToList();
-        if (periods.Count == 0)
-        {
-            return;
-        }
-
-        // forced or released hours are logged for them, not by them
-        if (!currentUser.IsActing && TimeOffRules.OffOn(today, periods) is { } period)
-        {
-            await AlertAsync(NotificationKinds.TimeOffHours, userId, period, $"time-off-hours-{period.Id}-{clock.ToCompanyTime(clock.UtcNow):yyyyMMddHH}", cancellationToken);
-            TimeOffRules.CheckNotOff(today, periods).ThrowIfDenied();
-        }
-
-        TimeOffRules.CheckEntryDays(entryDays, periods).ThrowIfDenied();
-    }
+    public async Task<IReadOnlyList<TimeOffRules.Period>> PeriodsOnAsync(long userId, IReadOnlyCollection<DateOnly> days, CancellationToken cancellationToken = default)
+        => days.Count == 0
+            ? []
+            : (await timeOff.GrantedAsync([userId], days.Min(), days.Max(), cancellationToken)).Select(x => x.Period).ToList();
 
     public async Task SeenAsync(long userId, CancellationToken cancellationToken = default)
     {

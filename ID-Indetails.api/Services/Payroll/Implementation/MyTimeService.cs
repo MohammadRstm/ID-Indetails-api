@@ -46,7 +46,7 @@ public sealed class MyTimeService(
             .Where(e => e.Id != request.EntryId && !request.Deletes.Contains(e.Id))
             .Select(e => moves.TryGetValue(e.Id, out var move)
                 ? WorkOn(e.Id, WorkEntryRules.AsUtc(move.StartedAt), (int)(WorkEntryRules.AsUtc(move.EndedAt) - WorkEntryRules.AsUtc(move.StartedAt)).TotalMinutes)
-                : WorkOn(e.Id, e.StartedAt, e.Minutes));
+                : WorkOn(e.Id, e.StartedAt, e.Minutes) with { AllOvertime = e.TimeOffOvertime });
 
         var result = OvertimePreview.Of(draft, others, calendar);
         return new OvertimePreviewResponse(

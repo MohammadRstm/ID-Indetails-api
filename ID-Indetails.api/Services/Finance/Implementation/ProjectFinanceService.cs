@@ -255,7 +255,7 @@ public sealed class ProjectFinanceService(
         {
             var days = allWork[userId]
                 .Select(e => (Entry: e, Local: clock.ToCompanyTime(e.StartedAt)))
-                .Select(x => new PaidBreaks.Work(x.Entry.Id, x.Entry.ProjectId, DateOnly.FromDateTime(x.Local), (int)x.Local.TimeOfDay.TotalMinutes, x.Entry.Minutes))
+                .Select(x => new PaidBreaks.Work(x.Entry.Id, x.Entry.ProjectId, DateOnly.FromDateTime(x.Local), (int)x.Local.TimeOfDay.TotalMinutes, x.Entry.Minutes, x.Entry.TimeOffOvertime))
                 .ToList();
             result.Add((userId, PaidBreaks.Allocate(days, calendars[userId]).Where(s => workedDays.Contains((userId, s.Day))).ToList()));
         }

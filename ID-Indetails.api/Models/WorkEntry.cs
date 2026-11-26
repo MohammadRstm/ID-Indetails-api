@@ -35,6 +35,12 @@ public class WorkEntry
     /// </summary>
     public long? TeamId { get; set; }
 
+    /// <summary>
+    /// Hours on a day of the person's time off that a super admin approved as overtime: all their minutes are overtime.
+    /// Approved as normal hours, or anywhere else, it is false.
+    /// </summary>
+    public bool TimeOffOvertime { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public DateTime? UpdatedAt { get; set; }

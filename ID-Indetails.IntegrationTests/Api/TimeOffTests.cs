@@ -12,15 +12,14 @@ using Shouldly;
 namespace ID_Indetails.IntegrationTests.Api;
 
 /// <summary>
-/// Time off: Design employees ask, a super admin decides once, and while someone is off they log no hours and the super
-/// admins hear when they are active. The clock is real, so days "today" are set straight in the database.
+/// Time off: Design employees ask, a super admin decides once, and while someone is off the super admins hear when they
+/// use the app. Hours and time off are in <see cref="TimeOffHoursTests"/>. The clock is real, so days "today" are set
+/// straight in the database.
 /// </summary>
 public class TimeOffTests(ApiFactory api) : IClassFixture<ApiFactory>
 {
     private readonly AuthTestSteps _steps = new(api);
     private HttpClient Client => _steps.Client;
-    private ProjectTestSteps Projects => new(_steps);
-    private WorkEntryTestSteps Work => new(_steps);
 
     private static DateOnly Today => WorkEntryTestSteps.CompanyDay(DateTime.UtcNow);
 
@@ -136,25 +135,14 @@ public class TimeOffTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task While_off_no_hours_are_logged_and_the_super_admins_are_alerted()
+    public async Task While_off_the_super_admins_hear_once_a_day_that_they_use_the_app()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
-        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         var asked = await AskAsync(employee);
         await ApproveAsync(superAdmin, asked.Id);
         await MoveAsync(asked.Id, Today.AddDays(-1), Today.AddDays(2));
 
-        for (var i = 0; i < 2; i++)
-        {
-            await (await Work.TryLogAsync(employee.AccessToken, project.Id, WorkEntryTestSteps.HoursAgoOnOneDay(3, 30), 30))
-                .ShouldFailWithAsync(422, ErrorCodes.OnTimeOff);
-        }
-
-        var alert = (await OfKindAsync(superAdmin, NotificationKinds.TimeOffHours)).Where(n => n.SubjectId == employee.User.Id).ShouldHaveSingleItem();
-        alert.Payload!.Value.GetProperty("userId").GetInt64().ShouldBe(employee.User.Id);
-
-        // being active at all alerts them too, once a day
         for (var i = 0; i < 2; i++)
         {
             await using var scope = api.Services.CreateAsyncScope();

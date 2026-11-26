@@ -33,6 +33,6 @@ public sealed class OvertimeService(IPayrollRepository payroll, IPayrollInputs i
     private Overtime.Work ToWork(WorkEntryTime entry)
     {
         var local = clock.ToCompanyTime(entry.StartedAt);
-        return new Overtime.Work(entry.Id, DateOnly.FromDateTime(local), (int)local.TimeOfDay.TotalMinutes, entry.Minutes);
+        return new Overtime.Work(entry.Id, DateOnly.FromDateTime(local), (int)local.TimeOfDay.TotalMinutes, entry.Minutes, entry.TimeOffOvertime);
     }
 }

@@ -6,8 +6,9 @@ using ID_Indetails.api.Services.Projects.Abstraction;
 namespace ID_Indetails.api.Business.WorkEntries;
 
 /// <summary>
-/// Hours logged on a project the logger's department isn't on: kept as a blocked change until approved or turned down.
-/// Until then they hold their time on the logger's day, as if logged: nothing else is logged over them.
+/// Hours logged on a project the logger's department isn't on, or on a day of their time off: kept as a blocked change
+/// until approved or turned down. Until then they hold their time on the logger's day, as if logged: nothing else is
+/// logged over them.
 /// </summary>
 public static class WaitingHours
 {

@@ -145,8 +145,17 @@ public static class NotificationKinds
     /// <summary>Someone on time off is using the app (subject: them). Once a day, to every super admin.</summary>
     public const string TimeOffOnline = "time_off_online";
 
-    /// <summary>Someone on time off tried to log or change hours (subject: them). At most once an hour, to every super admin.</summary>
+    /// <summary>
+    /// Someone logged hours on a day of their own time off: they wait for approval (subject: the blocked change). To every
+    /// super admin. Until 26 Nov 2026 it alerted that someone off tried to log hours (subject: them).
+    /// </summary>
     public const string TimeOffHours = "time_off_hours";
+
+    /// <summary>
+    /// Your hours on a day of time off were approved, as overtime or as normal hours, or turned down (subject: the project;
+    /// payload <c>approved</c>, <c>asOvertime</c>).
+    /// </summary>
+    public const string TimeOffHoursDecided = "time_off_hours_decided";
 
     // Salary advances (subject: the advance, type "salary_advance"; the leaver for unsettled). Never an amount.
 

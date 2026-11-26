@@ -4,8 +4,8 @@ using ID_Indetails.api.Models;
 namespace ID_Indetails.api.Services.TimeOff.Abstraction;
 
 /// <summary>
-/// What time off means elsewhere: no hours on its days or while it runs, no new meetings, the super admins' alerts when
-/// someone on it is active, and ending it when someone leaves Design's employees.
+/// What time off means elsewhere: hours on its days wait for approval, no new meetings, the super admins' alert when
+/// someone on it uses the app, and ending it when someone leaves Design's employees.
 /// </summary>
 public interface ITimeOffWatch
 {
@@ -13,12 +13,8 @@ public interface ITimeOffWatch
     Task<IReadOnlyList<(long UserId, TimeOffRules.Period Period)>> GrantedAsync(
         IReadOnlyCollection<long> userIds, DateOnly from, DateOnly to, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Refuses hours on a day off (<paramref name="entryDays"/>, the company days an entry touches), and any change to
-    /// hours while the person is off, telling the super admins (at most once an hour) when they tried it themselves.
-    /// Someone acting for the person (forced or released hours) is held only to the days.
-    /// </summary>
-    Task CheckHoursAsync(long userId, IReadOnlyCollection<DateOnly> entryDays, CancellationToken cancellationToken = default);
+    /// <summary>The person's granted time off that takes any of these days (none when there are no days).</summary>
+    Task<IReadOnlyList<TimeOffRules.Period>> PeriodsOnAsync(long userId, IReadOnlyCollection<DateOnly> days, CancellationToken cancellationToken = default);
 
     /// <summary>The person was active: tells the super admins, once a day, when they are off today. Never throws.</summary>
     Task SeenAsync(long userId, CancellationToken cancellationToken = default);
