@@ -3,6 +3,7 @@ using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.TimeOff;
+using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Business.WorkingTime;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.TimeOff;
@@ -17,6 +18,7 @@ using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Payroll.Abstraction;
 using ID_Indetails.api.Repositories.TimeOff.Abstraction;
 using ID_Indetails.api.Repositories.TimeOff.Implementation;
+using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
@@ -38,6 +40,7 @@ public sealed class TimeOffService(
     ITimeOffWatch watch,
     IPayrollRepository payroll,
     IPayrollInputs payrollInputs,
+    IWorkEntryRepository workEntries,
     IActivityEventRepository activity,
     INotificationSender notifications,
     IUnitOfWork unitOfWork,
@@ -221,13 +224,68 @@ public sealed class TimeOffService(
                 cancellationToken);
 
             // under way: whoever was told they're off hears they're back
-            if (asked.FirstDay <= today && await users.GetByIdAsync(asked.UserId, cancellationToken) is { } person)
+            if (asked.FirstDay <= today)
             {
-                await notifications.SendAsync(
-                    new NotificationDraft(NotificationKinds.TimeOffBack, actor.UserId, DomainCodes.Design, null, "user", person.Id,
-                        new { name = PersonName.Of(person.FirstName, person.LastName, person.Email), userId = person.Id }),
-                    await watch.HeadsUpRecipientsAsync(person.Id, person.TeamId, cancellationToken),
-                    cancellationToken);
+                await SendBackAsync(asked.UserId, actor.UserId, cancellationToken);
+            }
+
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+
+        return await DescribeAsync(id, forSuperAdmins: true, cancellationToken);
+    }
+
+    public async Task<TimeOffResponse> ChangeAsync(long id, ChangeTimeOffRequest request, CancellationToken cancellationToken = default)
+    {
+        var actor = await DeciderAsync(cancellationToken);
+        await using (var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken))
+        {
+            var asked = await LockAsync(id, cancellationToken);
+            var today = clock.CompanyToday;
+            var (first, last) = (request.FirstDay, request.LastDay);
+            var calendar = (await payrollInputs.CalendarsAsync([asked.UserId], cancellationToken))[asked.UserId];
+            var (excusedDays, excusedMonth) = await ExcusesAsync(asked.UserId, first, last, cancellationToken);
+            var added = TimeOffRules.DaysBetween(first, last).Where(d => d < asked.FirstDay || d > asked.LastDay).ToList();
+            TimeOffRules.CheckChange(
+                    asked.Status,
+                    first,
+                    last,
+                    today,
+                    first == asked.FirstDay && last == asked.LastDay && request.IsPaid == asked.IsPaid,
+                    WorkingDays(calendar, first, last) > 0,
+                    await timeOff.OverlapAsync(asked.UserId, asked.Id, first, last, cancellationToken),
+                    excusedDays,
+                    excusedMonth,
+                    await DaysWithHoursAsync(asked.UserId, added, cancellationToken))
+                .ThrowIfDenied();
+
+            var was = TimeOffRepository.PeriodOf(asked);
+            var now = clock.UtcNow;
+            asked.FirstDay = first;
+            asked.LastDay = last;
+            asked.IsPaid = request.IsPaid;
+            var reason = request.Reason.Trim();
+            activity.Add(ChangedEvent(asked, was, reason, actor.UserId, now));
+            await notifications.SendAsync(
+                new NotificationDraft(NotificationKinds.TimeOffChanged, actor.UserId, DomainCodes.Design, null, "time_off", asked.Id,
+                    new
+                    {
+                        firstDay = first,
+                        lastDay = last,
+                        isPaid = asked.IsPaid,
+                        previousFirstDay = was.FirstDay,
+                        previousLastDay = was.LastDay,
+                        previousIsPaid = was.IsPaid,
+                        reason,
+                    }),
+                [asked.UserId],
+                cancellationToken);
+
+            // off today before, not any more: whoever was told they're off hears they're back
+            if (was.IsOff(today) && !TimeOffRepository.PeriodOf(asked).IsOff(today))
+            {
+                await SendBackAsync(asked.UserId, actor.UserId, cancellationToken);
             }
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -266,6 +324,25 @@ public sealed class TimeOffService(
         }),
     };
 
+    /// <summary>The change's own row: the request as it is now, what its days and pay were, and why it changed.</summary>
+    private static ActivityEvent ChangedEvent(TimeOffRequest request, TimeOffRules.Period was, string reason, long actorId, DateTime at)
+    {
+        var row = Event(request, ActivityEventKinds.TimeOffChanged, actorId, at);
+        row.Payload = JsonSerializer.Serialize(new
+        {
+            requestId = request.Id,
+            firstDay = request.FirstDay,
+            lastDay = request.LastDay,
+            status = request.Status.ToString(),
+            isPaid = request.IsPaid,
+            previousFirstDay = was.FirstDay,
+            previousLastDay = was.LastDay,
+            previousIsPaid = was.IsPaid,
+            reason,
+        });
+        return row;
+    }
+
     internal static int WorkingDays(PersonCalendar calendar, DateOnly from, DateOnly to)
         => from > to ? 0 : TimeOffRules.DaysBetween(from, to).Count(d => calendar.HoursOn(d) is not null);
 
@@ -286,14 +363,54 @@ public sealed class TimeOffService(
     /// <summary>Whether any of these days is excused by hand: a day excuse, or a month excused whole.</summary>
     private async Task<bool> ExcusedAsync(long userId, DateOnly from, DateOnly to, CancellationToken cancellationToken)
     {
+        var (days, month) = await ExcusesAsync(userId, from, to, cancellationToken);
+        return days.Count > 0 || month is not null;
+    }
+
+    /// <summary>The days excused by hand from <paramref name="from"/> to <paramref name="to"/>, and the first month excused whole.</summary>
+    private async Task<(IReadOnlyList<DateOnly> Days, DateOnly? WholeMonth)> ExcusesAsync(long userId, DateOnly from, DateOnly to, CancellationToken cancellationToken)
+    {
         var months = new List<DateOnly>();
         for (var month = new DateOnly(from.Year, from.Month, 1); month <= to; month = month.AddMonths(1))
         {
             months.Add(month);
         }
 
-        return (await payroll.ExcusesAsync([userId], months, cancellationToken))
-            .Any(e => e.Kind == ExcuseKind.WholeMonth || e.Days.Any(d => d.Day >= from && d.Day <= to));
+        var excuses = await payroll.ExcusesAsync([userId], months, cancellationToken);
+        var wholeMonth = excuses.Where(e => e.Kind == ExcuseKind.WholeMonth).Select(e => (DateOnly?)e.MonthStart).Min();
+        var days = excuses.SelectMany(e => e.Days).Select(d => d.Day).Where(d => d >= from && d <= to).Distinct().ToList();
+        return (days, wholeMonth);
+    }
+
+    /// <summary>Which of these days hold any of the person's live hours (an entry's company days, as the hour block reads them).</summary>
+    private async Task<IReadOnlyList<DateOnly>> DaysWithHoursAsync(long userId, IReadOnlyList<DateOnly> days, CancellationToken cancellationToken)
+    {
+        if (days.Count == 0)
+        {
+            return [];
+        }
+
+        var spans = await workEntries.SpansAsync(
+            userId, clock.CompanyDayStartUtc(days.Min()), clock.CompanyDayStartUtc(days.Max().AddDays(1)), cancellationToken);
+        var logged = spans
+            .SelectMany(s => TimeOffRules.DaysBetween(clock.ToCompanyDate(WorkEntryRules.AsUtc(s.Start)), clock.ToCompanyDate(WorkEntryRules.AsUtc(s.End).AddMinutes(-1))))
+            .ToHashSet();
+        return days.Where(logged.Contains).ToList();
+    }
+
+    /// <summary>Someone who was off is back at work: told to whoever heard they were off.</summary>
+    private async Task SendBackAsync(long userId, long actorId, CancellationToken cancellationToken)
+    {
+        if (await users.GetByIdAsync(userId, cancellationToken) is not { } person)
+        {
+            return;
+        }
+
+        await notifications.SendAsync(
+            new NotificationDraft(NotificationKinds.TimeOffBack, actorId, DomainCodes.Design, null, "user", person.Id,
+                new { name = PersonName.Of(person.FirstName, person.LastName, person.Email), userId = person.Id }),
+            await watch.HeadsUpRecipientsAsync(person.Id, person.TeamId, cancellationToken),
+            cancellationToken);
     }
 
     private async Task<TimeOffResponse> DescribeAsync(long id, bool forSuperAdmins, CancellationToken cancellationToken)

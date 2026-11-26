@@ -1,3 +1,4 @@
+using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.TimeOff;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
@@ -48,6 +49,52 @@ public class TimeOffRulesTests
         TimeOffRules.CheckApprove(TimeOffStatus.Pending, Today, Today, false)!.Code.ShouldBe(ErrorCodes.TimeOffExpired);
         TimeOffRules.CheckApprove(TimeOffStatus.Pending, Today.AddDays(1), Today, true)!.Code.ShouldBe(ErrorCodes.TimeOffExcused);
         TimeOffRules.CheckPending(TimeOffStatus.Declined)!.Code.ShouldBe(ErrorCodes.TimeOffDecided);
+    }
+
+    private static RuleDenial? Change(
+        DateOnly first,
+        DateOnly last,
+        TimeOffStatus status = TimeOffStatus.Approved,
+        bool unchanged = false,
+        bool working = true,
+        Period? overlap = null,
+        DateOnly[]? excused = null,
+        DateOnly? excusedMonth = null,
+        DateOnly[]? withHours = null)
+        => TimeOffRules.CheckChange(status, first, last, Today, unchanged, working, overlap, excused ?? [], excusedMonth, withHours ?? []);
+
+    [Fact]
+    public void Approved_time_off_can_be_moved_into_the_past_but_not_past_six_months_ahead()
+    {
+        Change(Today.AddDays(-40), Today.AddDays(-35)).ShouldBeNull();
+        Change(Today, Today.AddDays(2)).ShouldBeNull();
+        Change(Today.AddMonths(6).AddDays(1), Today.AddMonths(6).AddDays(2))!.Code.ShouldBe(ErrorCodes.TimeOffTooFar);
+        Change(Today, Today.AddDays(-1))!.Code.ShouldBe(ErrorCodes.ValidationFailed);
+        Change(Today, Today, unchanged: true)!.Code.ShouldBe(ErrorCodes.ValidationFailed);
+        Change(Today, Today, working: false)!.Code.ShouldBe(ErrorCodes.TimeOffNoWorkingDay);
+        foreach (var status in new[] { TimeOffStatus.Pending, TimeOffStatus.Rejected, TimeOffStatus.Ended, TimeOffStatus.Declined })
+        {
+            Change(Today, Today, status)!.Code.ShouldBe(ErrorCodes.TimeOffNotApproved);
+        }
+    }
+
+    [Fact]
+    public void New_days_name_the_time_off_excuses_or_hours_they_would_clash_with()
+    {
+        var day = new DateOnly(2026, 11, 3);
+
+        var overlap = Change(day, day, overlap: Rejected(2, 10, on: 5))!;
+        overlap.Code.ShouldBe(ErrorCodes.TimeOffOverlaps);
+        overlap.Message.ShouldContain("2 Nov 2026 to 4 Nov 2026");
+
+        Change(day, day, excused: [day])!.Message.ShouldContain("3 Nov 2026 is already excused");
+        Change(day, day, excusedMonth: new DateOnly(2026, 11, 1))!.Message.ShouldContain("November 2026 is excused whole");
+
+        var hours = Change(day, day.AddDays(7), withHours: [day.AddDays(1), day])!;
+        hours.Code.ShouldBe(ErrorCodes.TimeOffHoursLogged);
+        hours.Message.ShouldContain("3 Nov 2026, 4 Nov 2026");
+        var many = Enumerable.Range(0, 7).Select(day.AddDays).ToArray();
+        Change(day, day.AddDays(7), withHours: many)!.Message.ShouldContain("and 2 more");
     }
 
     [Fact]

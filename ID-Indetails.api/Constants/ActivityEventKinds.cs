@@ -227,11 +227,14 @@ public static class ActivityEventKinds
     public const string TimeOffExpired = "time_off_expired";
     public const string TimeOffRejected = "time_off_rejected";
 
+    /// <summary>A super admin changed approved time off's days or pay; the old ones and the reason are in the payload.</summary>
+    public const string TimeOffChanged = "time_off_changed";
+
     /// <summary>Cancelled or cut short because the person left, moved out of Design or became an admin.</summary>
     public const string TimeOffEnded = "time_off_ended";
 
     public static readonly IReadOnlyList<string> TimeOff =
-        [TimeOffRequested, TimeOffWithdrawn, TimeOffApproved, TimeOffDeclined, TimeOffExpired, TimeOffRejected, TimeOffEnded];
+        [TimeOffRequested, TimeOffWithdrawn, TimeOffApproved, TimeOffDeclined, TimeOffExpired, TimeOffRejected, TimeOffChanged, TimeOffEnded];
 
     // Salary advances (company level, subject: the person; the advance and its status in the payload, never an amount).
     // Only those who see salaries or give advances see them.

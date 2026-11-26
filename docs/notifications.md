@@ -70,10 +70,11 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `schedule_changed` | The person | the person | `effectiveFrom`, `followsDefault` |
 | `time_off_requested` | Holders of `time_off:decide` (every super admin) | the request | `name`, `firstDay`, `lastDay` (never the reason) |
 | `time_off_withdrawn` | The same, when the employee takes back a pending request | the request | `name`, `firstDay`, `lastDay` |
-| `time_off_approved` | The employee | the request | `firstDay`, `lastDay`, `isPaid` (the only place the paid flag is sent) |
+| `time_off_approved` | The employee | the request | `firstDay`, `lastDay`, `isPaid` (with `time_off_changed`, the only places the paid flag is sent) |
 | `time_off_declined` | The employee | the request | `firstDay`, `lastDay` |
 | `time_off_rejected` | The employee, when approved time off is taken back | the request | `firstDay`, `lastDay`, `endedOn` |
-| `time_off_back` | The person's department (active employees and admins) and every super admin, never the person, when time off already under way is rejected | the person | `name`, `userId` |
+| `time_off_changed` | The employee, when a super admin changes approved time off's days or pay | the request | `firstDay`, `lastDay`, `isPaid`, `previousFirstDay`, `previousLastDay`, `previousIsPaid`, `reason` (the super admin's reason for the change) |
+| `time_off_back` | The person's department (active employees and admins) and every super admin, never the person, when time off already under way is rejected, or changed so the person is no longer off today | the person | `name`, `userId` |
 | `time_off_ended` | Holders of `time_off:decide`, when someone leaves, moves out of Design or becomes an admin and had open time off | the person | `name`, `userId`, `why` |
 | `time_off_online` | Holders of `time_off:decide`, when someone on time off uses the app. Once a day per request (`time-off-online-{requestId}-{yyyyMMdd}`) | the person | `name`, `userId`, `lastDay` |
 | `time_off_hours` | Holders of `time_off:decide`, when someone on time off tries to log or change hours. Once an hour per request (`time-off-hours-{requestId}-{yyyyMMddHH}`) | the person | `name`, `userId`, `lastDay` |

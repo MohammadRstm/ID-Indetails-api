@@ -15,11 +15,14 @@ The rules are in `Business/TimeOff/TimeOffRules.cs`. The requests are handled by
 | `POST /api/time-off/{id}/approve` | `time_off:decide` | `{ isPaid, note? }`: approves a pending request, paid or unpaid |
 | `POST /api/time-off/{id}/decline` | `time_off:decide` | `{ note? }`: declines a pending request |
 | `POST /api/time-off/{id}/reject` | `time_off:decide` | `{ note? }`: takes approved time off back until its last day |
+| `POST /api/time-off/{id}/change` | `time_off:decide` | `{ firstDay, lastDay, isPaid, reason }`: corrects approved time off's days and pay, past days included (below) |
 | `GET /api/time-off/away?from=&to=` | Signed in | Who is off on any day from `from` to `to` (today when both are left out) |
 
 Who holds the permissions: `time_off:request` is limited to Design and held by employees only (it is part of `PermissionCatalog.OwnWork`, so admins and super admins never hold it). `time_off:decide` is a company permission with Pay sensitivity, so only super admins hold it ([authorization.md](authorization.md)). Someone who is not a Design employee gets `403 forbidden` when asking, even if a permission was granted by hand.
 
 ## Requests and responses
+
+**Changing:** `firstDay`, `lastDay` and `reason` follow the same checks as asking (both days set, in order, at most 366 days, a reason of at most 500 characters); `isPaid` is the new pay, sent whether or not it changes.
 
 **Asking:** `firstDay` and `lastDay` are dates (`yyyy-MM-dd`), `reason` is required and at most 500 characters. `note` on a decision is optional and at most 500 characters. The validators check that both days are set, `lastDay` is not before `firstDay`, the request is at most 366 days long (a guard against a typo in the year, not a policy), and the reason is present and not too long (`400 validation_failed`).
 
@@ -57,6 +60,17 @@ Who holds the permissions: `time_off:request` is limited to Design and held by e
 - Declining only needs it pending (`422 time_off_decided` otherwise).
 - The employee withdraws only while it is pending (`422 time_off_decided` once decided, expired or cancelled).
 - A decision note is optional. The reason is seen only by the employee and the super admins.
+
+**Changing approved time off** (added 26 Nov 2026, so a mistake is fixed without SQL: someone off from Tuesday who asked only from Thursday).
+- A super admin can change the first day, the last day and whether it is paid on any approved request, coming up, under way or already over. Rejected, ended and pending requests can't be changed (`422 time_off_not_approved`). Nobody changes their own, since only employees ask and only super admins decide.
+- The new days may be in the past, closed months included: time off feeds pay live as day excuses (below), so salaries, the hours ledger and the reminders follow at once, as a pay change dated back does. The first day can be at most 6 months ahead (`400 time_off_too_far`), and the days must hold one of the person's working days (`400 time_off_no_working_day`). Sending the same days and pay is `400 validation_failed`.
+- Each refusal names the days:
+  - the new days can't touch the person's other time off: a pending request on any of its days, or a granted one on a day it took (`422 time_off_overlaps`);
+  - nor a day excused by hand, nor a month excused whole (`422 time_off_excused`); remove the excuse on Salaries first;
+  - nor add a day that already holds hours (`422 time_off_hours_logged`); remove or move those hours first. Days that were already time off aren't checked again.
+- A reason is required. It is kept in the activity event `time_off_changed` with the old days and pay, and sent to the employee (`time_off_changed`). The request's own reason, decision and decision note stay as they were.
+- It takes the same locks as a decision (the person, then the request), so it can't cross a decision, an excuse by hand or hours being logged.
+- If the person was off today and no longer is, the department and the super admins hear they are back (`time_off_back`). If the new days put them off today, the next scheduled run sends the heads-up as usual, once per request.
 
 **Expiry.** A request still pending when its first day comes expires (status `expired`) at the first scheduled run that day, and the employee is told. The day before, from 09:00, the super admins are reminded of requests still pending.
 
@@ -106,7 +120,7 @@ Salary detail (`GET /api/company/salaries/{userId}`) carries `timeOff` (each req
 
 - Only super admins and the employee see whether it is paid, the reason and the time-off activity.
 - Everyone else, through the heads-up, the "Off" flag (`/away`) and the activity feed, sees only that the person is off and until when. The feed hides every time-off event from callers without `time_off:decide`.
-- No notification payload carries the reason. `isPaid` goes only to the employee (`time_off_approved`).
+- No notification payload carries the reason. `isPaid` goes only to the employee (`time_off_approved`, `time_off_changed`).
 - Employees never see how many hours their colleagues log or are paid, and time off doesn't change that.
 
 ## Notifications and activity
@@ -121,16 +135,17 @@ Notification kinds (all in the `people` push category, [notifications.md](notifi
 | `time_off_approved` | The employee | Approved (payload has `isPaid`) |
 | `time_off_declined` | The employee | Declined |
 | `time_off_rejected` | The employee | Approved time off taken back from today |
+| `time_off_changed` | The employee | A super admin changed the days or pay (payload: the new and old days, `isPaid` before and after, and the reason) |
 | `time_off_expired` | The employee | Scheduled: nobody decided before its first day |
 | `time_off_starts` | The person's department and the super admins | Scheduled: the first day has come |
-| `time_off_back` | The person's department and the super admins | Time off under way was rejected |
+| `time_off_back` | The person's department and the super admins | Time off under way was rejected, or changed so they are no longer off today |
 | `time_off_ended` | Super admins | Cancelled or cut short: they left, moved out of Design or became an admin |
 | `time_off_online` | Super admins | Someone on time off used the app, once a day |
 | `time_off_hours` | Super admins | Someone on time off tried to change hours, once an hour |
 
 The six sent to super admins (`requested`, `undecided`, `withdrawn`, `ended`, `online`, `hours`) are only listed and openable while the reader holds `time_off:decide` (`NotificationAccess`).
 
-Activity events (Design domain, subject: the person, payload: the request, its days, its status and whether it is paid): `time_off_requested`, `time_off_withdrawn`, `time_off_approved`, `time_off_declined`, `time_off_expired`, `time_off_rejected`, `time_off_ended`. Only callers with `time_off:decide` see them.
+Activity events (Design domain, subject: the person, payload: the request, its days, its status and whether it is paid): `time_off_requested`, `time_off_withdrawn`, `time_off_approved`, `time_off_declined`, `time_off_expired`, `time_off_rejected`, `time_off_changed` (also `previousFirstDay`, `previousLastDay`, `previousIsPaid` and the `reason`), `time_off_ended`. Only callers with `time_off:decide` see them.
 
 ## The scheduled check
 
@@ -148,11 +163,12 @@ Every notification is keyed, so running twice sends once.
 | `time_off_too_soon` | 400 | The first day is today or earlier |
 | `time_off_too_far` | 400 | The first day is more than 6 months ahead |
 | `time_off_no_working_day` | 400 | The days hold none of the person's working days |
-| `time_off_overlaps` | 422 | Overlaps the person's own pending or approved time off |
-| `time_off_excused` | 422 | Some days are excused by hand (when asking, or since, when approving) |
+| `time_off_overlaps` | 422 | Overlaps the person's own pending or approved time off (or, when changing days, a day they took off) |
+| `time_off_excused` | 422 | Some days are excused by hand (when asking, since, when approving, or among the new days, when changing) |
 | `time_off_decided` | 422 | Already decided, withdrawn, expired or cancelled |
 | `time_off_expired` | 422 | Approving on or after its first day |
-| `time_off_not_approved` | 422 | Rejecting something that isn't approved |
+| `time_off_not_approved` | 422 | Rejecting or changing something that isn't approved |
+| `time_off_hours_logged` | 422 | Changing the days would add a day that already holds hours |
 | `time_off_over` | 422 | Rejecting after its last day |
 | `time_off_day` | 422 | Hours dated on a day of time off |
 | `on_time_off` | 422 | The person is off today and tried to change hours |
@@ -166,4 +182,4 @@ Every notification is keyed, so running twice sends once.
 
 ## Proton
 
-Not covered yet (the user's decision, 9 Nov 2026). The five write endpoints are `Open` entries in `ProtonCoverage` (Proton points to the page), and Proton has no read tool for time off. Proton is still blocked from logging hours on a day off or during time off, because it goes through the same `WorkEntryService`. See [proton.md](proton.md).
+Not covered yet (the user's decision, 9 Nov 2026). The six write endpoints (with changing days, 26 Nov 2026) are `Open` entries in `ProtonCoverage` (Proton points to the page), and Proton has no read tool for time off. Proton is still blocked from logging hours on a day off or during time off, because it goes through the same `WorkEntryService`. See [proton.md](proton.md).

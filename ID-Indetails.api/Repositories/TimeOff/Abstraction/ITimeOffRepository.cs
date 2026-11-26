@@ -36,6 +36,12 @@ public interface ITimeOffRepository
     Task<bool> HeldOnAsync(long userId, DateOnly from, DateOnly to, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Another request of someone's, other than <paramref name="exceptId"/>, that holds a day from <paramref name="from"/>
+    /// to <paramref name="to"/>: pending on any of its days, or granted on a day it took.
+    /// </summary>
+    Task<TimeOffRules.Period?> OverlapAsync(long userId, long exceptId, DateOnly from, DateOnly to, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// The granted requests (approved, rejected, ended) of these people that may take a day from <paramref name="from"/>
     /// to <paramref name="to"/>; <see cref="TimeOffRules.Period.LastTaken"/> says which days they did take.
     /// </summary>

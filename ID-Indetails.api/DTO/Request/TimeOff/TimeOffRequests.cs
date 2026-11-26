@@ -27,6 +27,19 @@ public sealed record TimeOffNoteRequest
     public string? Note { get; init; }
 }
 
+/// <summary>A super admin correcting approved time off: the new days and pay, and why.</summary>
+public sealed record ChangeTimeOffRequest
+{
+    public DateOnly FirstDay { get; init; }
+
+    public DateOnly LastDay { get; init; }
+
+    public bool IsPaid { get; init; }
+
+    /// <summary>Why it changed: required, kept in the activity feed and told to the employee.</summary>
+    public string Reason { get; init; } = string.Empty;
+}
+
 public sealed record TimeOffListQuery
 {
     public TimeOffView View { get; init; } = TimeOffView.Pending;
